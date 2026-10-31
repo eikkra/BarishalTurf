@@ -20,11 +20,13 @@
   --body: 'Barlow', system-ui, sans-serif;
   --r-sm: 8px; --r: 14px; --r-lg: 22px;
   --shadow: 0 12px 32px -14px rgba(15, 77, 50, .35);
+  --card-shadow: 0 1px 1px rgba(4, 24, 14, .04), 0 18px 40px -30px rgba(4, 24, 14, .45);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
-body { margin: 0; font: 16px/1.55 var(--body); color: var(--ink); background: var(--chalk); }
+body { margin: 0; font: 16px/1.55 var(--body); color: var(--ink); -webkit-font-smoothing: antialiased;
+  background: radial-gradient(1100px 600px at 100% 0, rgba(233, 181, 47, .07), transparent 60%), radial-gradient(900px 600px at 0 40%, rgba(16, 102, 62, .06), transparent 60%), var(--chalk); }
 img { max-width: 100%; display: block; }
 a { color: inherit; }
 h1, h2, h3 { font-family: var(--display); line-height: 1.05; margin: 0; letter-spacing: .005em; }

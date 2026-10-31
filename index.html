@@ -8,12 +8,17 @@
   <meta name="description" content="Check live free hours and book Barishal Turf Arena online. Floodlit turf in Rupatali, Barishal.">
   <meta name="theme-color" content="#04180e">
   <link rel="icon" href="assets/icon.png">
+  <!-- Ask the Sheet for data first, before fonts/CSS/icons download (site.js picks up window.BOOT) -->
+  <script src="assets/config.js"></script>
+  <script>window.BOOT = fetch(window.TURF_API, { method: 'POST', body: '{"action":"boot"}' }).then(r => r.json()).catch(() => null);</script>
   <link rel="preconnect" href="https://script.google.com">
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="image" href="assets/logo-full.webp">
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=Hind+Siliguri:wght@500&display=swap" rel="stylesheet">
+  <!-- Fonts load without blocking the first paint -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=Hind+Siliguri:wght@500&display=swap" onload="this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=Hind+Siliguri:wght@500&display=swap"></noscript>
   <link rel="stylesheet" href="assets/base.css">
   <link rel="stylesheet" href="assets/site.css">
   <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" defer></script>
@@ -36,15 +41,16 @@
   <div class="splash" id="splash" aria-hidden="true"><div class="splash-in"><span class="ring"></span><img src="assets/logo-full.webp" alt="" width="420" height="360"><span class="shine"></span></div></div>
   <a class="sr-only" href="#book">Skip to booking</a>
 
+  <!-- One line on every screen; on phones the text glides sideways (track holds it twice for a seamless loop) -->
   <div class="offer-bar" id="offerBar" hidden>
-    <iconify-icon icon="mdi:bullhorn-variant"></iconify-icon><span data-s="offerTitle"></span>
+    <div class="offer-track"><span><iconify-icon icon="mdi:bullhorn-variant"></iconify-icon><b data-s="offerTitle"></b></span><span aria-hidden="true"><iconify-icon icon="mdi:bullhorn-variant"></iconify-icon><b data-s="offerTitle"></b></span></div>
   </div>
 
   <header class="top">
     <div class="wrap top-in">
-      <a class="brand" href="#"><img class="brand-logo" data-logo src="assets/logo.webp" alt="Barishal Turf Arena" width="72" height="59"><span data-s="name">Barishal Turf Arena</span></a>
+      <a class="brand" href="#"><img class="brand-logo" data-logo src="assets/logo.webp" alt="" width="56" height="46"><span data-s="name">Barishal Turf Arena</span></a>
       <nav class="nav" id="nav" aria-label="Main">
-        <a href="#book">Book</a><a href="#prices">Prices</a><a href="#facilities">Facilities</a><a href="#gallery" id="galleryLink" hidden>Photos</a><a href="#visit">Visit</a>
+        <a href="#prices">Prices</a><a href="#book">Book</a><a href="#about">About</a><a href="#facilities">Facilities</a><a href="#gallery" id="galleryLink" hidden>Photos</a><a href="#visit">Visit</a>
       </nav>
       <a class="btn btn-sm call" data-href="tel"><iconify-icon icon="mdi:phone"></iconify-icon><span data-s="phone"></span></a>
       <button class="btn btn-icon btn-ghost menu" id="menuBtn" aria-label="Open menu" aria-expanded="false"><iconify-icon icon="mdi:menu"></iconify-icon></button>
@@ -81,6 +87,15 @@
   </section>
 
   <main>
+    <section class="section alt prices-sec" id="prices">
+      <div class="wrap">
+        <div class="head"><h2>Hourly booking price</h2><p>All prices are per hour.</p></div>
+        <div class="wk-tabs" id="wkTabs" role="tablist" aria-label="Price list"></div>
+        <div class="offers" id="offers"></div>
+        <div class="rate-tables" id="rateTables"></div>
+      </div>
+    </section>
+
     <section class="section" id="book">
       <div class="wrap">
         <div class="head">
@@ -113,13 +128,23 @@
       </div>
     </section>
 
-    <section class="section alt" id="prices">
-      <div class="wrap">
-        <div class="head"><h2>Hourly booking price</h2><p>All prices are per hour.</p></div>
-        <div class="offers" id="offers"></div>
-        <div class="rate-tables" id="rateTables"></div>
+    <section class="section about-sec" id="about">
+      <div class="wrap about">
+        <div class="about-media reveal" id="aboutMedia"><img id="aboutImg" alt="" loading="lazy" hidden><img class="about-logo" src="assets/logo-full.webp" alt="" loading="lazy"></div>
+        <div class="about-copy reveal">
+          <h2 data-s="aboutTitle"></h2>
+          <p class="about-text" data-s="aboutText"></p>
+          <ul class="brand-chips" id="aboutChips"></ul>
+          <div class="about-facts">
+            <div><b id="factHours"></b><span>Open every day</span></div>
+            <div><b id="factDays"></b><span>Book ahead</span></div>
+            <div><b id="factMax"></b><span>Per online booking</span></div>
+          </div>
+          <a class="btn btn-gold" href="#book"><iconify-icon icon="mdi:calendar-check"></iconify-icon>Book your slot</a>
+        </div>
       </div>
     </section>
+
 
     <section class="section" id="facilities">
       <div class="wrap">
@@ -169,10 +194,38 @@
   </main>
 
   <footer class="foot">
-    <div class="wrap foot-in">
-      <img data-logo src="assets/logo.webp" alt="" width="88" height="72" loading="lazy">
-      <div><b data-s="name"></b><span class="bn" data-s="address"></span></div>
-      <span class="foot-copy">© <span id="year"></span></span>
+    <div class="wrap foot-grid">
+      <div class="foot-brand">
+        <a class="foot-logo" href="#"><img data-logo src="assets/logo.webp" alt="" width="56" height="46" loading="lazy"><span><b data-s="name"></b><small id="footLine"></small></span></a>
+        <p data-s="footerText"></p>
+        <div class="socials">
+          <a data-href="fb" target="_blank" rel="noopener" aria-label="Facebook" hidden><iconify-icon icon="mdi:facebook"></iconify-icon></a>
+          <a data-href="msg" target="_blank" rel="noopener" aria-label="Messenger" hidden><iconify-icon icon="mdi:facebook-messenger"></iconify-icon></a>
+          <a data-href="wa" target="_blank" rel="noopener" aria-label="WhatsApp"><iconify-icon icon="mdi:whatsapp"></iconify-icon></a>
+          <a data-href="mail" aria-label="Email"><iconify-icon icon="mdi:email-outline"></iconify-icon></a>
+        </div>
+      </div>
+      <nav class="foot-col" aria-label="Footer">
+        <h3>Quick links</h3>
+        <a href="#">Home</a><a href="#about">About</a><a href="#facilities">Facilities</a><a href="#prices">Prices</a>
+        <a href="#gallery" data-gallery hidden>Photos</a><a href="#visit">Location</a><a href="#faq">FAQ</a><a class="gold" href="#book">Book a slot</a>
+      </nav>
+      <div class="foot-col">
+        <h3>Opening hours</h3>
+        <p class="foot-strong">Open daily (7 days)</p>
+        <p id="footHours"></p>
+        <p class="foot-note" data-s="footerNote"></p>
+      </div>
+      <div class="foot-col">
+        <h3>Get in touch</h3>
+        <a class="foot-item bn" data-href="map" target="_blank" rel="noopener"><iconify-icon icon="mdi:map-marker-outline"></iconify-icon><span data-s="address"></span></a>
+        <a class="foot-item" data-href="tel"><iconify-icon icon="mdi:phone-outline"></iconify-icon><span data-s="phone"></span></a>
+        <a class="foot-item" data-href="mail"><iconify-icon icon="mdi:email-outline"></iconify-icon><span data-s="email"></span></a>
+      </div>
+    </div>
+    <div class="wrap foot-bottom">
+      <span>© <span id="year"></span> <span data-s="name"></span>. All rights reserved.</span>
+      <span>Crafted with <iconify-icon icon="mdi:heart" class="heart"></iconify-icon> by <a href="https://www.facebook.com/mdrashedulhasan02/" target="_blank" rel="noopener">Md Rashedul Hasan</a></span>
     </div>
   </footer>
 
@@ -181,7 +234,6 @@
     <a class="btn btn-gold" href="#summary">Review and send</a>
   </div>
 
-  <script src="assets/config.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/site.js"></script>
 </body>

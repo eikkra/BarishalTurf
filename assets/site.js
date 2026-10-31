@@ -1,7 +1,7 @@
 // Public site logic. Needs api.js (api, $, esc, icon, taka, shortRange, toRuns, imgSrc…).
 // Talks to Code.gs: boot (settings + prices + 7 days of slots in one call), availability (other dates), book.
 const T0 = performance.now();
-const S = { cfg: null, today: todayISO(), days: {}, date: todayISO(), sel: new Set(), seq: 0, slide: 0, slideKey: '', slideTimer: 0, bootAt: 0 };
+const S = { week: 'weekday', cfg: null, today: todayISO(), days: {}, date: todayISO(), sel: new Set(), seq: 0, slide: 0, slideKey: '', slideTimer: 0, bootAt: 0 };
 const form = $('#bookForm');
 const CACHE = 'bta_boot_v2';
 const STATE_TEXT = { booked: 'Booked', blocked: 'Closed', past: 'Over', closed: 'Closed' };
@@ -13,26 +13,37 @@ const pickIcon = (list, text, fallback) => (list.find(([re]) => re.test(text)) |
 
 /* ───── Boot: paint from the last visit instantly, then refresh from the Sheet ───── */
 
-(async function boot() {
+async function boot() {
   $('#year').textContent = new Date().getFullYear();
+  setTimeout(hideSplash, 1200); // never hold the page behind the splash longer than this
   try { const me = JSON.parse(localStorage.getItem('turf_me')); if (me) { form.elements.name.value = me.name; form.elements.phone.value = me.phone; } } catch {}
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(CACHE)); } catch {}
-  if (cached) { apply(cached, cached.today === todayISO()); hideSplash(); }
+  if (cached) { apply(cached, cached.today === todayISO()); hideSplash(); } else renderSkeleton();
   try {
-    await refreshAll();
+    await refreshAll(window.BOOT);
   } catch (e) {
     if (!cached) $('#board').innerHTML = `<div class="board-msg">${icon('wifi-off')} The booking system is not reachable right now. ${esc(e.message)}
       <button type="button" class="btn btn-sm" onclick="location.reload()">${icon('refresh')}Try again</button></div>`;
   }
   hideSplash();
-})();
+}
 
-async function refreshAll() {
-  const data = await api('boot');
+/** early = the request already started in <head>; falls back to a fresh call if it failed. */
+async function refreshAll(early) {
+  const json = early && await early;
+  const data = json && json.ok ? json.data : await api('boot');
   S.bootAt = Date.now();
   try { localStorage.setItem(CACHE, JSON.stringify(data)); } catch {}
   apply(data, true);
+}
+
+/** First visit only: show the page shape right away while the Sheet answers. */
+function renderSkeleton() {
+  $('#days').innerHTML = Array.from({ length: 7 }, () => '<div class="day skel"></div>').join('');
+  $('#board').innerHTML = Array(4).fill('<div class="skel"></div>').join('');
+  $('#rateTables').innerHTML = '<div class="skel tall"></div><div class="skel tall"></div>';
+  $('#summary').innerHTML = '<h3>Your booking</h3><p class="summary-empty">Loading live times…</p>';
 }
 
 function hideSplash() {
@@ -48,6 +59,24 @@ function apply(data, useDays) {
   renderDays(); renderPrices();
   if (S.days[S.date]) renderBoard(); else loadDay();
   if (S.days[S.today]) renderToday(S.days[S.today]);
+  observeReveal();
+}
+
+/* ───── Scroll reveal: blocks rise in once as they enter the screen ───── */
+
+const REVEAL = '.head, .step, .summary, .offer, .rate, .facilities li, .gallery img, .map, .visit-info, details, .foot-grid > *, .about-media, .about-copy';
+const revealer = 'IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches
+  && new IntersectionObserver(entries => entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); revealer.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+if (revealer) document.documentElement.classList.add('anim');
+
+function observeReveal() {
+  if (!revealer) return;
+  $$(REVEAL).filter(el => !el.dataset.rv).forEach(el => {
+    el.dataset.rv = 1;
+    el.classList.add('reveal');
+    el.style.setProperty('--d', `${([...el.parentNode.children].indexOf(el) % 6) * 0.07}s`); // siblings arrive one after another
+    revealer.observe(el);
+  });
 }
 
 /* ───── Brand, links, prices, facilities ───── */
@@ -68,13 +97,25 @@ function applyBrand() {
   if ($('#map').src !== map) $('#map').src = map;
   $('#offerBar').hidden = !s.offerActive;
   $('#openHours').textContent = `Every day, ${hourLabel(s.openHour)} – ${hourLabel(s.closeHour)}`;
+  $('#footHours').textContent = `${hourLabel(s.openHour)} – ${hourLabel(s.closeHour)}`;
+  $('#footLine').textContent = splitList(s.brandLine).join(' · ');
+
+  // About: chips from brandLine, facts from the booking rules, photo = aboutImage or the first slideshow photo
+  $('#aboutChips').innerHTML = splitList(s.brandLine).map(x => `<li>${esc(x)}</li>`).join('');
+  $('#factHours').textContent = shortRange(s.openHour, s.closeHour - s.openHour);
+  $('#factDays').textContent = `${s.bookAheadDays} days`;
+  $('#factMax').textContent = `Up to ${s.maxHours} hrs`;
+  const aboutPhoto = s.aboutImage || splitList(s.heroImages)[0];
+  $('#aboutImg').hidden = !aboutPhoto;
+  $('#aboutMedia').classList.toggle('has-img', !!aboutPhoto);
+  if (aboutPhoto && $('#aboutImg').getAttribute('src') !== imgSrc(aboutPhoto)) $('#aboutImg').src = imgSrc(aboutPhoto);
   $('#pickHint').textContent = `(tap one or more, up to ${s.maxHours})`;
   $('#otherDate').min = S.today;
   $('#otherDate').max = addDays(S.today, s.bookAheadDays);
 
-  $('#facilityList').innerHTML = splitList(s.facilities).map(f => `<li>${icon(pickIcon(FACILITY_ICONS, f, 'check-decagram'))}${esc(f)}</li>`).join('');
+  $('#facilityList').innerHTML = splitList(s.facilities).map(f => `<li><span class="fi">${icon(pickIcon(FACILITY_ICONS, f, 'check-decagram'))}</span>${esc(f)}</li>`).join('');
   const photos = splitList(s.gallery);
-  $('#gallery').hidden = $('#galleryLink').hidden = !photos.length;
+  $('#gallery').hidden = $('#galleryLink').hidden = $('[data-gallery]').hidden = !photos.length;
   $('#galleryGrid').innerHTML = photos.map((u, i) => `<img src="${esc(imgSrc(u))}" alt="${esc(s.name)} photo ${i + 1}" loading="lazy">`).join('');
   setSlides(splitList(s.heroImages).map(imgSrc), Math.max(2, s.slideSeconds || 6));
 }
@@ -96,17 +137,18 @@ function renderPrices() {
     s.offerNote && `<div class="offer">${icon('gift-outline')}<div><b>Bonus</b><span>${esc(s.offerNote)}</span></div></div>`,
     `<div class="offer">${icon('calendar-check')}<div><b>${s.advancePercent}% advance</b><span>Pay at least ${s.advancePercent}% to book your slot</span></div></div>`,
   ].filter(Boolean).join('');
-  const table = weekend => {
-    const sub = weekend ? `${wk.map(d => DAY_NAMES[d]).join(', ')} & govt. holidays` : dayRange([0, 1, 2, 3, 4, 5, 6].filter(d => !wk.includes(d)));
-    return `<div class="rate ${weekend ? 'weekend' : ''}"><div class="rate-head"><h3>${weekend ? 'Weekends' : 'Weekdays'}</h3><span>${sub}</span></div>
-      <table><thead><tr><th>Slot</th><th>Time</th>${s.offerActive ? '<th>Regular</th>' : ''}<th>${s.offerActive ? `Offer (${s.offerPercent}% off)` : 'Price'}</th></tr></thead><tbody>
-      ${S.cfg.pricing.map(b => {
-        const time = shortRange(b.start, b.end - b.start);
-        return `<tr><td>${icon(pickIcon(BAND_ICONS, b.label, 'clock-outline'))}<div>${esc(b.label)}<small>${time}</small></div></td><td>${time}</td>
-          ${s.offerActive ? `<td class="reg">${taka(weekend ? b.weekend : b.weekday)}</td>` : ''}<td class="now">${taka(weekend ? b.weekendPrice : b.weekdayPrice)}</td></tr>`;
-      }).join('')}</tbody></table></div>`;
-  };
-  $('#rateTables').innerHTML = table(false) + table(true);
+  const subOf = weekend => (weekend ? `${wk.map(d => DAY_NAMES[d]).join(', ')} & govt. holidays` : dayRange([0, 1, 2, 3, 4, 5, 6].filter(d => !wk.includes(d))));
+  // Slim toggle (weekdays green / weekends red) switches one compact table
+  $('#wkTabs').innerHTML = ['weekday', 'weekend'].map(k => `<button role="tab" class="wk-${k}" data-week="${k}" aria-selected="${S.week === k}">
+    <b>${k === 'weekend' ? 'Weekends & holidays' : 'Weekdays'}</b><small>${subOf(k === 'weekend')}</small></button>`).join('');
+  const weekend = S.week === 'weekend';
+  $('#rateTables').innerHTML = `<div class="rate ${weekend ? 'weekend' : ''}"><table>
+    <thead><tr><th>Slot</th><th>Time</th>${s.offerActive ? '<th>Regular</th>' : ''}<th>${s.offerActive ? `Offer (${s.offerPercent}% off)` : 'Price'}</th></tr></thead><tbody>
+    ${S.cfg.pricing.map(b => {
+      const time = shortRange(b.start, b.end - b.start);
+      return `<tr><td>${icon(pickIcon(BAND_ICONS, b.label, 'clock-outline'))}<div>${esc(b.label)}<small>${time}</small></div></td><td>${time}</td>
+        ${s.offerActive ? `<td class="reg">${taka(weekend ? b.weekend : b.weekday)}</td>` : ''}<td class="now">${taka(weekend ? b.weekendPrice : b.weekdayPrice)}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
 }
 
 /* ───── Hero slideshow (images from Settings → heroImages, every slideSeconds) ───── */
@@ -131,6 +173,7 @@ function setSlides(urls, secs) {
   S.showSlide = i => { show(i); start(); };
   if (urls.length) { show(0); start(); }
 }
+$('#wkTabs').addEventListener('click', e => { const b = e.target.closest('[data-week]'); if (b) { S.week = b.dataset.week; renderPrices(); } });
 $('#dots').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) S.showSlide(Number(b.dataset.i)); });
 
 /* ───── Step 1: days ───── */
@@ -285,3 +328,6 @@ $('#nav').addEventListener('click', e => e.target.closest('a') && $('#nav').clas
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.cfg && Date.now() - S.bootAt > 60000) refreshAll().catch(() => {}); });
 // Mobile: hide the floating price bar while the real summary is on screen
 new IntersectionObserver(([e]) => document.body.classList.toggle('summary-visible', e.isIntersecting)).observe($('#summary'));
+
+// Start last, so every function and constant above already exists when cached data paints synchronously.
+boot();

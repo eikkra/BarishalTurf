@@ -222,9 +222,12 @@ const SETTING_GROUPS = [
   ['Logo & photos', [['logoUrl', 'Logo link', 'images', 'Google Drive or image link; empty = built-in logo'],
     ['heroImages', 'Top slideshow photos', 'images', 'one link per line; Google Drive files must be shared "Anyone with the link"'],
     ['slideSeconds', 'Change photo every', 'number', 'seconds'], ['gallery', 'Photos section', 'images', 'one link per line, optional']]],
-  ['Booking rules', [['openHour', 'Opens at', 'number', 'hour 0–23'], ['closeHour', 'Closes at', 'number', 'hour 1–24'], ['maxHours', 'Longest online booking', 'number', 'hours'],
+  ['Booking rules', [['openHour', 'Opens at', 'number', 'hour 0–23'], ['closeHour', 'Closes at', 'number', 'hour 1–24'], ['maxHours', 'Most hours per online request', 'number', 'hours'],
     ['bookAheadDays', 'Book up to', 'number', 'days ahead'], ['holdHours', 'Hold unpaid requests for', 'number', 'hours'], ['advancePercent', 'Advance to confirm', 'number', '% of total'],
     ['holidays', 'Holidays with weekend prices', 'textarea', 'dates like 2026-12-16, comma separated']]],
+  ['About & footer', [['aboutTitle', 'About heading'], ['brandLine', 'Brand words', 'text', 'comma separated, e.g. Play, Friends, Fitness, Fun'],
+    ['aboutText', 'About text', 'textarea'], ['footerText', 'Footer text', 'textarea'],
+    ['footerNote', 'Footer note box', 'text', 'e.g. night match info'], ['aboutImage', 'About photo', 'images', 'empty = first slideshow photo']]],
   ['After booking', [['paymentInfo', 'Payment instructions shown to the customer', 'textarea']]],
 ];
 
