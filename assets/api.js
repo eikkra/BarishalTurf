@@ -15,8 +15,28 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const icon = (name, cls = '') => `<iconify-icon icon="mdi:${name}" class="${cls}" aria-hidden="true"></iconify-icon>`;
 
 const taka = n => (n < 0 ? '-' : '') + '৳' + Math.abs(Math.round(Number(n) || 0)).toLocaleString('en-IN');
-const hourLabel = h => `${h % 12 || 12}:00 ${h % 24 < 12 ? 'AM' : 'PM'}`;
+const ampm = h => (h % 24 < 12 ? 'AM' : 'PM');
+const hourLabel = h => `${h % 12 || 12}:00 ${ampm(h)}`;
 const timeRange = (start, hours) => `${hourLabel(start)} – ${hourLabel(start + hours)}`;
+/** Compact range: 6–7 AM, 11 AM–12 PM, 6–9 PM */
+const shortRange = (start, hours = 1) => {
+  const a = start % 12 || 12, z = (start + hours) % 12 || 12;
+  return ampm(start) === ampm(start + hours) ? `${a}–${z} ${ampm(start)}` : `${a} ${ampm(start)}–${z} ${ampm(start + hours)}`;
+};
+/** [6, 7, 9] → [{start: 6, hours: 2}, {start: 9, hours: 1}] (same rule as runs_ in Code.gs) */
+const toRuns = hrs => [...hrs].sort((a, z) => a - z).reduce((out, h) => {
+  const last = out[out.length - 1];
+  if (last && last.start + last.hours === h) last.hours++; else out.push({ start: h, hours: 1 });
+  return out;
+}, []);
+
+/** Comma/new-line separated text → trimmed list. */
+const splitList = v => String(v || '').split(/[\n,]+/).map(x => x.trim()).filter(Boolean);
+/** Google Drive share link → direct image URL (file must be shared "Anyone with the link"). Other URLs pass through. */
+const imgSrc = u => {
+  const id = /drive\.google\.com|docs\.google\.com/.test(u) && (u.match(/\/d\/([\w-]{20,})/) || u.match(/[?&]id=([\w-]{20,})/));
+  return id ? `https://lh3.googleusercontent.com/d/${id[1]}=w1920` : u;
+};
 
 const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
 const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };

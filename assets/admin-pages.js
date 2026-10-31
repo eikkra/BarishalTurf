@@ -9,7 +9,9 @@ const chip = s => (s ? `<span class="chip chip-${s}">${icon(STATUS_ICON[s])}${s 
 const sumBy = (arr, k) => arr.reduce((t, x) => t + (Number(typeof k === 'function' ? k(x) : x[k]) || 0), 0);
 const kpi = (ic, label, value, sub = '') => `<div class="kpi">${icon(ic)}<span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
 const empty = (msg, ic = 'inbox-outline') => `<div class="empty">${icon(ic)}<p>${msg}</p></div>`;
-const who = b => `<b>${esc(b.name)}</b><small>${esc(b.phone)}</small>`;
+const who = b => `<button class="link" data-act="view" data-id="${esc(b.id)}">${esc(b.name)}</button><small>${esc(b.phone)}</small>`;
+const openHours = () => A.d.settings.closeHour - A.d.settings.openHour;
+const thumbs = text => `<div class="thumbs">${splitList(text).map(u => `<img src="${esc(imgSrc(u))}" alt="" loading="lazy" onerror="this.classList.add('bad')">`).join('')}</div>`;
 const when = b => `${fmtDate(b.date)}<small>${timeRange(b.start, b.hours)}</small>`;
 const act = (a, id, ic, label, cls = '') => `<button class="btn btn-sm ${cls}" data-act="${a}" data-id="${esc(id)}">${icon(ic)}${label}</button>`;
 const iconAct = (a, id, ic, label) => `<button class="btn btn-icon btn-ghost" data-act="${a}" data-id="${esc(id)}" title="${label}" aria-label="${label}">${icon(ic)}</button>`;
@@ -83,6 +85,7 @@ const PAGES = {
       ${kpi('cash-check', 'Collected today', taka(sumBy(A.d.payments.filter(p => String(p.date).startsWith(today)), 'amount')))}
       ${kpi('cash-clock', 'Still to collect', taka(sumBy(bk, 'due')), 'Across all active bookings')}
     </div>
+    ${panel('Next 7 days', weekStrip(), '<a class="btn btn-sm btn-ghost" href="#schedule">Open calendar</a>')}
     ${panel('New website requests', requests.length ? `<ul class="list">${requests.map(reqItem).join('')}</ul>` : empty('No new requests. Website bookings land here first.'), `<span class="count">${requests.length}</span>`)}
     ${panel('Today', todays.length ? `<ul class="list">${todays.map(dayItem).join('')}</ul>` : empty('Nothing booked today yet.', 'calendar-blank'), '<a class="btn btn-sm btn-ghost" href="#schedule">Open schedule</a>')}
     ${panel('Last 14 days', moneyChart(dailyMoney(addDays(today, -13), today)))}`;
@@ -101,42 +104,17 @@ const PAGES = {
       <button class="btn" data-act="export-bookings">${icon('download')}Export CSV</button></div>
     <p class="meta">${rows.length} bookings, ${taka(sumBy(rows.filter(b => b.status !== 'Cancelled'), 'total'))} booked value</p>
     ${table(['Booking', 'Customer', 'Date & time', 'Total', 'Paid', 'Due', 'Status', 'Payment', ''], shown.map(b => [
-      `<b>${esc(b.id)}</b><small>${b.source === 'web' ? 'Website' : 'Counter'}</small>`, who(b), when(b), taka(b.total), taka(b.paid),
+      `<button class="link" data-act="view" data-id="${esc(b.id)}">${esc(b.id)}</button><small>${b.source === 'web' ? 'Website' : 'Counter'}</small>`, who(b), when(b), taka(b.total), taka(b.paid),
       b.due > 0 ? `<b class="due">${taka(b.due)}</b>` : taka(0), statusSelect(b) + (b.status === 'Pending' && !b.held ? chip('Expired') : ''), chip(b.pay),
       `<div class="item-act">${iconAct('edit', b.id, 'pencil', 'Edit')}${b.due > 0 ? iconAct('pay', b.id, 'cash-plus', 'Record payment') : ''}${waBtn(b)}</div>`]), 'No bookings match these filters.')}
     ${rows.length > shown.length ? `<button class="btn more" data-act="more">Show more (${rows.length - shown.length} left)</button>` : ''}`;
   },
 
   schedule() {
-    const s = A.d.settings, day = A.f.day || A.d.today, now = day === A.d.today ? A.d.hour : day < A.d.today ? 99 : -1;
-    const bk = A.d.bookings.filter(b => b.date === day && b.held), bl = A.d.blocks.filter(x => x.date === day);
-    const rows = [];
-    let free = 0;
-    for (let h = s.openHour; h < s.closeHour;) {
-      const b = bk.find(x => h >= x.start && h < x.start + x.hours), k = bl.find(x => h >= +x.start && h < +x.end);
-      if (b) {
-        const end = b.start + b.hours;
-        rows.push(`<li class="srow booked"><div class="stime">${timeRange(h, end - h)}</div><div class="who">${who(b)}</div>
-          <div>${taka(b.total)}<small>${b.due > 0 ? `Due ${taka(b.due)}` : 'Fully paid'}</small></div><div>${chip(b.status)}</div>
-          <div class="item-act">${b.due > 0 ? iconAct('pay', b.id, 'cash-plus', 'Record payment') : ''}${iconAct('edit', b.id, 'pencil', 'Edit')}${waBtn(b)}</div></li>`);
-        h = end;
-      } else if (k) {
-        rows.push(`<li class="srow blocked"><div class="stime">${timeRange(h, +k.end - h)}</div><div class="who"><b>${icon('cone')} ${esc(k.reason)}</b><small>Closed for booking</small></div>
-          <div></div><div></div><div class="item-act">${act('unblock', k.id, 'lock-open-variant-outline', 'Open again')}</div></li>`);
-        h = +k.end;
-      } else {
-        free++;
-        rows.push(`<li class="srow free${h <= now ? ' gone' : ''}"><div class="stime">${timeRange(h, 1)}</div><div class="who"><b>Free</b></div><div></div><div></div>
-          <div class="item-act">${act('book-slot', h, 'plus', 'Book')}${act('block', h, 'cone', 'Block')}</div></li>`);
-        h++;
-      }
-    }
-    const blockedHrs = sumBy(bl, x => x.end - x.start);
-    return `<div class="filters daynav">
-      ${iconAct('day', -1, 'chevron-left', 'Previous day')}<input class="input" type="date" data-f="day" value="${day}" aria-label="Day">${iconAct('day', 1, 'chevron-right', 'Next day')}
-      <button class="btn" data-act="day" data-id="0">Today</button><b class="dayname">${fmtDate(day, { weekday: 'long', day: 'numeric', month: 'long' })}</b></div>
-    <div class="kpis">${kpi('soccer-field', 'Booked hours', sumBy(bk, 'hours'), taka(sumBy(bk, 'total')) + ' booked value')}${kpi('calendar-blank-outline', 'Free hours', free)}${kpi('cone', 'Blocked hours', blockedHrs)}</div>
-    <section class="panel"><ul class="list schedule">${rows.join('')}</ul></section>`;
+    const day = A.f.day || A.d.today, month = A.f.cal || day.slice(0, 7);
+    const title = fmtDate(month + '-01', { month: 'long', year: 'numeric' });
+    const nav = `${iconAct('cal', -1, 'chevron-left', 'Previous month')}${iconAct('cal', 1, 'chevron-right', 'Next month')}`;
+    return `<div class="sched">${panel(title, calendar(month, day), nav)}<div class="sched-day">${dayView(day)}</div></div>`;
   },
 
   customers() {
@@ -213,6 +191,7 @@ const PAGES = {
         <label class="switch"><input type="checkbox" name="offerActive" ${s.offerActive ? 'checked' : ''}><span></span>Show the offer and discounted prices</label>
         <div class="grid-2"><label class="field">Discount (%)<input class="input" type="number" min="0" max="90" name="offerPercent" value="${s.offerPercent}"></label>
         <label class="field">Banner text<input class="input" name="offerTitle" value="${esc(s.offerTitle)}" maxlength="80"></label></div>
+        <label class="field"><span>Extra offer line <small>shown under prices, leave empty to hide</small></span><input class="input" name="offerNote" value="${esc(s.offerNote)}" maxlength="120"></label>
         <div class="form-end"><button class="btn btn-turf">${icon('content-save')}Save offer</button></div></form>`)
     + panel('Hourly rates', `<p class="meta">Regular price per hour. Customers see it with the offer discount applied. Bands should cover opening hours (${hourLabel(s.openHour)} – ${hourLabel(s.closeHour)}) without gaps.</p>
       <form class="form" data-form="rates"><div class="tbl-wrap"><table class="tbl rates"><thead><tr><th>Name</th><th>From</th><th>To</th><th>Weekday ৳/hr</th><th>Weekend ৳/hr</th><th></th></tr></thead>
@@ -221,9 +200,12 @@ const PAGES = {
   },
 
   settings() {
-    const s = A.d.settings, field = ([k, label, type = 'text', hint = '']) => type === 'textarea'
-      ? `<label class="field"><span>${label} ${hint ? `<small>${hint}</small>` : ''}</span><textarea class="input" name="${k}">${esc(s[k])}</textarea></label>`
-      : `<label class="field"><span>${label} ${hint ? `<small>${hint}</small>` : ''}</span><input class="input" type="${type}" name="${k}" value="${esc(s[k])}"></label>`;
+    const s = A.d.settings, field = ([k, label, type = 'text', hint = '']) => {
+      const head = `<span>${label} ${hint ? `<small>${hint}</small>` : ''}</span>`;
+      if (type === 'images') return `<label class="field wide">${head}<textarea class="input" name="${k}" data-thumbs>${esc(s[k])}</textarea>${thumbs(s[k])}</label>`;
+      if (type === 'textarea') return `<label class="field">${head}<textarea class="input" name="${k}">${esc(s[k])}</textarea></label>`;
+      return `<label class="field">${head}<input class="input" type="${type}" name="${k}" value="${esc(s[k])}"></label>`;
+    };
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], wk = String(s.weekendDays).split(',').map(x => x.trim());
     return `<form class="form" data-form="settings">${SETTING_GROUPS.map(([title, fields]) => panel(title, `<div class="grid-2">${fields.map(field).join('')}</div>
       ${title === 'Booking rules' ? `<fieldset class="days-pick"><legend>Weekend price days</legend>${days.map((d, i) => `<label><input type="checkbox" name="wd" value="${i}" ${wk.includes(String(i)) ? 'checked' : ''}>${d}</label>`).join('')}</fieldset>` : ''}`)).join('')}
@@ -235,8 +217,11 @@ const PAGES = {
 
 const SETTING_GROUPS = [
   ['Arena details', [['name', 'Arena name'], ['tagline', 'Tagline'], ['phone', 'Phone'], ['whatsapp', 'WhatsApp number', 'text', 'with 880, e.g. 8801711…'],
-    ['email', 'Email', 'email'], ['facebook', 'Facebook page link', 'url'], ['address', 'Address'], ['mapQuery', 'Map search text', 'text', 'what Google Maps should find'],
-    ['heroImage', 'Hero photo link', 'url', 'optional'], ['facilities', 'Facilities', 'textarea', 'comma separated'], ['gallery', 'Photo links', 'textarea', 'comma separated, optional']]],
+    ['email', 'Email', 'email'], ['facebook', 'Facebook page link', 'url'], ['messenger', 'Messenger link', 'url', 'e.g. https://m.me/…'], ['address', 'Address'],
+    ['mapQuery', 'Map location', 'text', 'place name, or exact "lat, lng" from Google Maps'], ['facilities', 'Facilities', 'textarea', 'comma separated']]],
+  ['Logo & photos', [['logoUrl', 'Logo link', 'images', 'Google Drive or image link; empty = built-in logo'],
+    ['heroImages', 'Top slideshow photos', 'images', 'one link per line; Google Drive files must be shared "Anyone with the link"'],
+    ['slideSeconds', 'Change photo every', 'number', 'seconds'], ['gallery', 'Photos section', 'images', 'one link per line, optional']]],
   ['Booking rules', [['openHour', 'Opens at', 'number', 'hour 0–23'], ['closeHour', 'Closes at', 'number', 'hour 1–24'], ['maxHours', 'Longest online booking', 'number', 'hours'],
     ['bookAheadDays', 'Book up to', 'number', 'days ahead'], ['holdHours', 'Hold unpaid requests for', 'number', 'hours'], ['advancePercent', 'Advance to confirm', 'number', '% of total'],
     ['holidays', 'Holidays with weekend prices', 'textarea', 'dates like 2026-12-16, comma separated']]],
@@ -249,4 +234,64 @@ function periodRange(p) {
   if (p === '30') return [addDays(t, -29), t];
   if (p === 'all') return [A.d.bookings.reduce((a, b) => (b.date < a ? b.date : a), t), A.d.bookings.reduce((a, b) => (b.date > a ? b.date : a), t)];
   return [m + '-01', monthEnd(m)];
+}
+
+/** One day hour by hour: bookings, blocks, free hours with Book / Block buttons. */
+function dayView(day) {
+  const s = A.d.settings, now = day === A.d.today ? A.d.hour : day < A.d.today ? 99 : -1;
+  const bk = A.byDate[day] || [], bl = A.d.blocks.filter(x => x.date === day);
+  const rows = [];
+  let free = 0;
+  for (let h = s.openHour; h < s.closeHour;) {
+    const b = bk.find(x => h >= x.start && h < x.start + x.hours), k = bl.find(x => h >= +x.start && h < +x.end);
+    if (b) {
+      const end = b.start + b.hours;
+      rows.push(`<li class="srow booked"><div class="stime">${timeRange(h, end - h)}</div><div class="who">${who(b)}</div>
+        <div>${taka(b.total)}<small>${b.due > 0 ? `Due ${taka(b.due)}` : 'Fully paid'}</small></div><div>${chip(b.status)}</div>
+        <div class="item-act">${b.due > 0 ? iconAct('pay', b.id, 'cash-plus', 'Record payment') : ''}${iconAct('edit', b.id, 'pencil', 'Edit')}${waBtn(b)}</div></li>`);
+      h = end;
+    } else if (k) {
+      rows.push(`<li class="srow blocked"><div class="stime">${timeRange(h, +k.end - h)}</div><div class="who"><b>${icon('cone')} ${esc(k.reason)}</b><small>Closed for booking</small></div>
+        <div></div><div></div><div class="item-act">${act('unblock', k.id, 'lock-open-variant-outline', 'Open again')}</div></li>`);
+      h = +k.end;
+    } else {
+      free++;
+      rows.push(`<li class="srow free${h <= now ? ' gone' : ''}"><div class="stime">${timeRange(h, 1)}</div><div class="who"><b>Free</b></div><div></div><div></div>
+        <div class="item-act">${act('book-slot', h, 'plus', 'Book')}${act('block', h, 'cone', 'Block')}</div></li>`);
+      h++;
+    }
+  }
+  const blockedHrs = sumBy(bl, x => x.end - x.start);
+  return `<div class="filters daynav">
+    ${iconAct('day', -1, 'chevron-left', 'Previous day')}<input class="input" type="date" data-f="day" value="${day}" aria-label="Day">${iconAct('day', 1, 'chevron-right', 'Next day')}
+    <button class="btn" data-act="day" data-id="0">Today</button><b class="dayname">${fmtDate(day, { weekday: 'long', day: 'numeric', month: 'long' })}</b></div>
+  <div class="kpis">${kpi('soccer-field', 'Booked hours', sumBy(bk, 'hours'), taka(sumBy(bk, 'total')) + ' booked value')}${kpi('calendar-blank-outline', 'Free hours', free)}${kpi('cone', 'Blocked hours', blockedHrs)}</div>
+  <section class="panel"><ul class="list schedule">${rows.join('')}</ul></section>`;
+}
+
+/** Month grid: each day shows how many bookings and how full the pitch is. Click a day to open it. */
+function calendar(month, sel) {
+  const first = month + '-01', lead = new Date(first + 'T12:00:00Z').getUTCDay(), open = openHours();
+  const days = []; for (let d = first; d.startsWith(month); d = addDays(d, 1)) days.push(d);
+  const cell = d => {
+    const bk = A.byDate[d] || [], hrs = sumBy(bk, 'hours'), pending = bk.filter(b => b.status === 'Pending').length;
+    const cls = ['cal-day', d === sel && 'on', d === A.d.today && 'today', d < A.d.today && 'past'].filter(Boolean).join(' ');
+    return `<button class="${cls}" data-act="pick-day" data-id="${d}" aria-label="${fmtDate(d, { day: 'numeric', month: 'long' })}: ${bk.length} bookings">
+      <b>${Number(d.slice(8))}</b>${bk.length ? `<small>${bk.length} bk</small>` : ''}${pending ? `<em title="${pending} pending"></em>` : ''}
+      <i class="occ" style="--p:${Math.min(100, hrs / open * 100)}%"></i></button>`;
+  };
+  return `<div class="cal">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => `<span class="cal-h">${x}</span>`).join('')}
+    ${'<span></span>'.repeat(lead)}${days.map(cell).join('')}</div>
+    <p class="meta cal-key"><i class="occ" style="--p:60%"></i> bar = hours booked <em></em> = waiting for confirmation</p>`;
+}
+
+/** Overview strip: the next 7 days at a glance. */
+function weekStrip() {
+  const open = openHours();
+  return `<div class="week">${Array.from({ length: 7 }, (_, i) => addDays(A.d.today, i)).map((d, i) => {
+    const bk = A.byDate[d] || [], hrs = sumBy(bk, 'hours'), pending = bk.filter(b => b.status === 'Pending').length;
+    return `<button class="wk" data-act="pick-day" data-id="${d}"><span>${i ? fmtDate(d, { weekday: 'short' }) : 'Today'}</span>
+      <b>${fmtDate(d, { day: 'numeric', month: 'short' })}</b><i class="occ" style="--p:${Math.min(100, hrs / open * 100)}%"></i>
+      <small>${hrs} of ${open} h booked</small>${pending ? `<small class="pend">${pending} waiting</small>` : ''}</button>`;
+  }).join('')}</div>`;
 }

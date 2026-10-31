@@ -1,14 +1,17 @@
 /* Shared tokens + controls. Used by index.html (site.css) and admin/index.html (admin.css). */
 :root {
-  --turf: #0f4d32;      /* pitch green — hero, sidebar */
-  --turf-2: #136040;    /* mown stripe */
-  --chalk: #f4f7f3;     /* page background, pitch lines */
+  --night: #04180e;     /* floodlit-night green — hero, footer, splash */
+  --turf: #0b4a2d;      /* brand green — sidebar, primary buttons */
+  --turf-2: #10663e;    /* mown stripe / hover */
+  --chalk: #f4f6f2;     /* page background */
   --paper: #ffffff;
-  --ink: #0e2219;
-  --muted: #5e776a;
-  --line: #d9e3dc;
-  --bib: #ffc53d;       /* training-bib yellow — selection & main CTA */
-  --bib-ink: #2f2200;
+  --ink: #0b1d14;
+  --muted: #59705f;
+  --line: #dce4de;
+  --gold: #e9b52f;      /* logo gold — selection & main CTA */
+  --gold-hi: #f8d877;
+  --gold-ink: #2a1d00;
+  --gold-grad: linear-gradient(135deg, #f8d877 0%, #e9b52f 45%, #c98f12 100%);
   --ok: #17663f;  --ok-bg: #e2f3e9;
   --warn: #8a5300; --warn-bg: #fff1d6;
   --info: #34507a; --info-bg: #e6ecf5;
@@ -26,7 +29,7 @@ img { max-width: 100%; display: block; }
 a { color: inherit; }
 h1, h2, h3 { font-family: var(--display); line-height: 1.05; margin: 0; letter-spacing: .005em; }
 iconify-icon { display: inline-block; width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; }
-:focus-visible { outline: 3px solid var(--bib); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 [hidden] { display: none !important; }
 
@@ -39,8 +42,8 @@ iconify-icon { display: inline-block; width: 1.15em; height: 1.15em; flex: none;
 }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
-.btn-bib { background: var(--bib); color: var(--bib-ink); border-color: var(--bib); }
-.btn-bib:hover:not(:disabled) { background: #ffd366; }
+.btn-gold { background: var(--gold-grad); color: var(--gold-ink); border-color: transparent; box-shadow: 0 6px 18px -8px rgba(201, 143, 18, .8); }
+.btn-gold:hover:not(:disabled) { filter: brightness(1.06); }
 .btn-turf { background: var(--turf); color: #fff; border-color: var(--turf); }
 .btn-turf:hover:not(:disabled) { background: var(--turf-2); }
 .btn-ghost { background: transparent; }

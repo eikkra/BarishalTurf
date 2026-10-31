@@ -5,19 +5,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex">
-  <title>Arena dashboard</title>
-  <meta name="theme-color" content="#0f4d32">
+  <title>Dashboard | Barishal Turf Arena</title>
+  <meta name="theme-color" content="#04180e">
+  <link rel="icon" href="../assets/icon.png">
+  <link rel="preconnect" href="https://script.google.com">
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/base.css">
   <link rel="stylesheet" href="../assets/admin.css">
-  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" defer></script>
 </head>
 <body>
   <section class="login" id="login" hidden>
     <form class="login-card" id="loginForm">
-      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="11" fill="#0f4d32"/><path d="M20 4v32" stroke="#f4f7f3" stroke-width="2"/><circle cx="20" cy="20" r="8" fill="none" stroke="#f4f7f3" stroke-width="2"/><circle cx="20" cy="20" r="2.2" fill="#ffc53d"/></svg>
+      <img class="login-logo" data-logo src="../assets/logo.webp" alt="Barishal Turf Arena" width="160" height="132">
       <h1>Arena dashboard</h1>
       <p>Sign in to manage bookings, payments and prices.</p>
       <label class="field">Password<input class="input" type="password" name="password" autocomplete="current-password" required autofocus></label>
@@ -28,7 +31,7 @@
   <div class="app" id="app" hidden>
     <aside class="side" id="side">
       <a class="side-brand" href="#overview">
-        <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="11" fill="#f4f7f3"/><path d="M20 4v32" stroke="#0f4d32" stroke-width="2"/><circle cx="20" cy="20" r="8" fill="none" stroke="#0f4d32" stroke-width="2"/><circle cx="20" cy="20" r="2.2" fill="#ffc53d"/></svg>
+        <img class="side-logo" data-logo src="../assets/logo.webp" alt="" width="54" height="44">
         <span id="arenaName">Arena</span>
       </a>
       <nav class="side-nav" id="sideNav" aria-label="Dashboard"></nav>

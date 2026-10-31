@@ -19,8 +19,11 @@ async function call(action, payload = {}) {
   }
 }
 
+const CACHE = 'bta_admin_v2';
+
 async function refresh() {
   A.d = await call('data');
+  try { localStorage.setItem(CACHE, JSON.stringify(A.d)); } catch {} // next visit opens instantly
   derive();
   showApp();
   render();
@@ -29,12 +32,14 @@ async function refresh() {
 /** Adds due/payment state to bookings and builds the customer list. */
 function derive() {
   A.byId = {};
+  A.byDate = {}; // bookings that occupy the pitch, per day (calendar, schedule, week strip)
   const cust = {};
   A.d.bookings.forEach(b => {
     const active = b.status !== 'Cancelled';
     b.due = active ? Math.max(0, b.total - b.paid) : 0;
     b.pay = !active ? '' : b.paid >= b.total ? 'Paid' : b.paid > 0 ? 'Partial' : 'Unpaid';
     A.byId[b.id] = b;
+    if (b.held) (A.byDate[b.date] ||= []).push(b);
     const c = cust[b.phone] ||= { phone: b.phone, name: b.name, count: 0, spent: 0, due: 0, last: '' };
     if (b.date >= c.last) { c.last = b.date; c.name = b.name; }
     c.count += active ? 1 : 0; c.spent += b.paid; c.due += b.due;
@@ -48,6 +53,11 @@ function showApp() {
   $('#login').hidden = true;
   $('#app').hidden = false;
   $('#arenaName').textContent = A.d.settings.name;
+  const logo = A.d.settings.logoUrl ? imgSrc(A.d.settings.logoUrl) : '../assets/logo.webp';
+  $$('[data-logo]').forEach(img => {
+    img.onerror = () => { img.onerror = null; img.src = '../assets/logo.webp'; }; // broken custom link → built-in logo
+    if (img.getAttribute('src') !== logo) img.src = logo;
+  });
   $('#barDate').textContent = fmtDate(A.d.today, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
@@ -63,6 +73,7 @@ function render() {
 
 function logout() {
   localStorage.removeItem('turf_token');
+  localStorage.removeItem(CACHE);
   A.token = null; A.d = null;
   $('#app').hidden = true;
   $('#login').hidden = false;
@@ -111,6 +122,25 @@ function bookingModal(b, pre = {}) {
   $('[name=total]', dlg).addEventListener('input', e => { e.target.dataset.dirty = '1'; });
 }
 
+/** Everything about one booking: who, when, money, every payment, and the actions. */
+function detailModal(b) {
+  const pays = A.d.payments.filter(p => p.bookingId === b.id).sort((x, y) => String(x.date).localeCompare(y.date));
+  openModal(`<h2>${esc(b.id)}</h2><div class="det-chips">${chip(b.status)}${chip(b.pay)}${b.status === 'Pending' && !b.held ? chip('Expired') : ''}</div>
+    <dl class="det">
+      <div><dt>Customer</dt><dd><b>${esc(b.name)}</b><br>${esc(b.phone)}</dd></div>
+      <div><dt>Day & time</dt><dd>${fmtDate(b.date, { weekday: 'long', day: 'numeric', month: 'long' })}<br>${timeRange(b.start, b.hours)} (${b.hours} h)</dd></div>
+      <div><dt>Booked from</dt><dd>${b.source === 'web' ? 'Website' : 'Counter'}<br><small>${esc(b.createdAt)}</small></dd></div>
+      ${b.note ? `<div><dt>Note</dt><dd>${esc(b.note)}</dd></div>` : ''}
+    </dl>
+    <div class="det-money"><div><span>Total</span><b>${taka(b.total)}</b>${b.regular > b.total ? `<small>Regular ${taka(b.regular)}</small>` : ''}</div>
+      <div><span>Paid</span><b>${taka(b.paid)}</b></div><div><span>Due</span><b class="${b.due > 0 ? 'due' : ''}">${taka(b.due)}</b></div></div>
+    <h3 class="det-h">Payments</h3>
+    ${pays.length ? `<ul class="pay-list">${pays.map(p => `<li><span>${esc(String(p.date).slice(0, 16))}</span><span>${esc(p.method)}${p.ref ? `, ${esc(p.ref)}` : ''}</span><b class="${p.amount < 0 ? 'due' : ''}">${taka(p.amount)}</b></li>`).join('')}</ul>`
+      : '<p class="meta">No payment recorded yet.</p>'}
+    <div class="modal-actions">${b.status === 'Pending' ? act('confirm', b.id, 'check', 'Confirm', 'btn-turf') : ''}${b.due > 0 ? act('pay', b.id, 'cash-plus', 'Record payment', 'btn-turf') : ''}
+      ${act('edit', b.id, 'pencil', 'Edit')}${waBtn(b)}${b.status !== 'Cancelled' ? act('cancel', b.id, 'close', 'Cancel', 'btn-danger') : ''}</div>`, { wide: true });
+}
+
 function paymentModal(b) {
   formModal('Record payment', `<p class="modal-sub"><b>${esc(b.id)}</b>, ${esc(b.name)}, ${fmtDate(b.date)} ${timeRange(b.start, b.hours)}<br>
     Total ${taka(b.total)}, paid ${taka(b.paid)}, due <b>${taka(b.due)}</b></p>
@@ -151,7 +181,10 @@ const ACTIONS = {
   logout,
   refresh: (_, btn) => busy(btn, () => refresh().then(() => toast('Up to date')).catch(e => toast(e.message, 'error'))),
   new: () => bookingModal(),
+  view: id => detailModal(A.byId[id]),
   edit: id => bookingModal(A.byId[id]),
+  'pick-day': d => { A.f.day = d; A.f.cal = d.slice(0, 7); if (location.hash === '#schedule') render(); else location.hash = 'schedule'; },
+  cal: n => { const m = A.f.cal || (A.f.day || A.d.today).slice(0, 7); A.f.cal = Number(n) ? addDays(m + '-15', Number(n) * 30).slice(0, 7) : A.d.today.slice(0, 7); render(); },
   pay: id => paymentModal(A.byId[id]),
   confirm: id => mutate('setStatus', { id, status: 'Confirmed' }, `${id} confirmed`),
   cancel: id => {
@@ -162,7 +195,7 @@ const ACTIONS = {
   'book-slot': h => bookingModal(null, { date: A.f.day || A.d.today, start: Number(h) }),
   block: h => blockModal(A.f.day || A.d.today, Number(h)),
   unblock: id => mutate('remove', { sheet: 'Blocks', id }, 'Time opened again'),
-  day: n => { A.f.day = Number(n) ? addDays(A.f.day || A.d.today, Number(n)) : A.d.today; render(); },
+  day: n => { A.f.day = Number(n) ? addDays(A.f.day || A.d.today, Number(n)) : A.d.today; A.f.cal = A.f.day.slice(0, 7); render(); },
   'view-customer': phone => { A.f.q = phone; A.f.status = A.f.from = A.f.to = ''; location.hash = 'bookings'; },
   ptab: t => { A.f.ptab = t; render(); },
   more: () => { A.limit += 100; render(); },
@@ -215,11 +248,13 @@ document.addEventListener('click', e => {
   if (!el || !ACTIONS[el.dataset.act]) return;
   e.preventDefault();
   if (el.dataset.act !== 'menu' && el.closest('.side')) document.body.classList.remove('nav-open');
+  if (el.closest('dialog') && !el.closest('form')) el.closest('dialog').close(); // detail modal → next step opens fresh
   ACTIONS[el.dataset.act](el.dataset.id, el);
 });
 $('#sideNav').addEventListener('click', () => document.body.classList.remove('nav-open'));
 
 $('#main').addEventListener('input', e => {
+  if (e.target.matches('[data-thumbs]')) { e.target.nextElementSibling.outerHTML = thumbs(e.target.value); return; } // live photo previews
   const k = e.target.dataset.f;
   if (!k || e.target.type === 'date' || e.target.type === 'month' || e.target.tagName === 'SELECT') return;
   A.f[k] = e.target.value; A.limit = 100;
@@ -278,5 +313,10 @@ setInterval(() => {
   if (A.d && !document.hidden && !typing && !$('dialog[open]')) refresh().catch(() => {});
 }, 60000);
 
-if (A.token) refresh().catch(e => { toast(e.message, 'error'); if (!A.d) logout(); });
-else logout();
+if (A.token) {
+  try { // paint the last known data instantly, then refresh from the Sheet
+    A.d = JSON.parse(localStorage.getItem(CACHE));
+    if (A.d) { derive(); showApp(); render(); }
+  } catch { A.d = null; }
+  refresh().catch(e => { toast(e.message, 'error'); if (!A.d) logout(); });
+} else logout();
