@@ -1,0 +1,95 @@
+/* Shared tokens + controls. Used by index.html (site.css) and admin/index.html (admin.css). */
+:root {
+  --turf: #0f4d32;      /* pitch green — hero, sidebar */
+  --turf-2: #136040;    /* mown stripe */
+  --chalk: #f4f7f3;     /* page background, pitch lines */
+  --paper: #ffffff;
+  --ink: #0e2219;
+  --muted: #5e776a;
+  --line: #d9e3dc;
+  --bib: #ffc53d;       /* training-bib yellow — selection & main CTA */
+  --bib-ink: #2f2200;
+  --ok: #17663f;  --ok-bg: #e2f3e9;
+  --warn: #8a5300; --warn-bg: #fff1d6;
+  --info: #34507a; --info-bg: #e6ecf5;
+  --bad: #9e2a23;  --bad-bg: #fbe4e2;
+  --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --body: 'Barlow', system-ui, sans-serif;
+  --r-sm: 8px; --r: 14px; --r-lg: 22px;
+  --shadow: 0 12px 32px -14px rgba(15, 77, 50, .35);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body { margin: 0; font: 16px/1.55 var(--body); color: var(--ink); background: var(--chalk); }
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.05; margin: 0; letter-spacing: .005em; }
+iconify-icon { display: inline-block; width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; }
+:focus-visible { outline: 3px solid var(--bib); outline-offset: 2px; border-radius: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5em;
+  min-height: 44px; padding: 0 1.15em; border: 1px solid transparent; border-radius: 999px;
+  font: 600 15px var(--body); text-decoration: none; cursor: pointer; white-space: nowrap;
+  background: var(--paper); color: var(--ink); border-color: var(--line); transition: background .15s, transform .1s;
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn-bib { background: var(--bib); color: var(--bib-ink); border-color: var(--bib); }
+.btn-bib:hover:not(:disabled) { background: #ffd366; }
+.btn-turf { background: var(--turf); color: #fff; border-color: var(--turf); }
+.btn-turf:hover:not(:disabled) { background: var(--turf-2); }
+.btn-ghost { background: transparent; }
+.btn-ghost:hover:not(:disabled) { background: rgba(15, 77, 50, .06); }
+.btn-danger { color: var(--bad); }
+.btn-sm { min-height: 34px; padding: 0 .8em; font-size: 13.5px; }
+.btn-icon { width: 40px; min-height: 40px; padding: 0; }
+.spinner { width: 1em; height: 1em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+
+/* Forms */
+.field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+.field small { font-weight: 400; color: var(--muted); }
+.input, select.input, textarea.input {
+  width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  font: 16px var(--body); color: var(--ink); background: var(--paper);
+}
+textarea.input { min-height: 84px; resize: vertical; }
+.input:focus { outline: none; border-color: var(--turf); box-shadow: 0 0 0 3px rgba(19, 96, 64, .15); }
+.grid-2 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+
+/* Status chips: icon + word, never colour alone */
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 7px; border-radius: 999px; font: 600 12.5px var(--body); white-space: nowrap; }
+.chip-Pending { background: var(--warn-bg); color: var(--warn); }
+.chip-Confirmed, .chip-Paid { background: var(--ok-bg); color: var(--ok); }
+.chip-Completed { background: var(--info-bg); color: var(--info); }
+.chip-Cancelled, .chip-Unpaid { background: var(--bad-bg); color: var(--bad); }
+.chip-Partial, .chip-Expired { background: #eef1ef; color: var(--muted); }
+
+/* Modal */
+.modal { width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 26px; border: 0; border-radius: var(--r-lg); color: var(--ink); box-shadow: var(--shadow); }
+.modal-wide { width: min(760px, calc(100vw - 24px)); }
+.modal::backdrop { background: rgba(8, 30, 20, .55); backdrop-filter: blur(3px); }
+.modal[open] { animation: pop .18s ease-out; }
+.modal h2 { font-size: 28px; margin: 0 40px 4px 0; }
+.modal-x { position: absolute; top: 14px; right: 14px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: var(--chalk); cursor: pointer; font-size: 18px; color: var(--ink); }
+.modal form { display: grid; gap: 14px; margin-top: 16px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 6px; }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+
+/* Toast */
+.toast {
+  position: fixed; z-index: 100; left: 50%; bottom: 22px; transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: center; max-width: calc(100vw - 32px);
+  padding: 12px 18px; border-radius: 12px; background: var(--ink); color: #fff; font-weight: 500; box-shadow: var(--shadow);
+  animation: pop .2s ease-out;
+}
+.toast-error { background: var(--bad); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

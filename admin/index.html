@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Dashboard. Loads: ../assets/config.js → api.js → admin-pages.js → admin-core.js (+ base.css, admin.css) -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Arena dashboard</title>
+  <meta name="theme-color" content="#0f4d32">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/base.css">
+  <link rel="stylesheet" href="../assets/admin.css">
+  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
+</head>
+<body>
+  <section class="login" id="login" hidden>
+    <form class="login-card" id="loginForm">
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="11" fill="#0f4d32"/><path d="M20 4v32" stroke="#f4f7f3" stroke-width="2"/><circle cx="20" cy="20" r="8" fill="none" stroke="#f4f7f3" stroke-width="2"/><circle cx="20" cy="20" r="2.2" fill="#ffc53d"/></svg>
+      <h1>Arena dashboard</h1>
+      <p>Sign in to manage bookings, payments and prices.</p>
+      <label class="field">Password<input class="input" type="password" name="password" autocomplete="current-password" required autofocus></label>
+      <button class="btn btn-turf">Sign in</button>
+    </form>
+  </section>
+
+  <div class="app" id="app" hidden>
+    <aside class="side" id="side">
+      <a class="side-brand" href="#overview">
+        <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="11" fill="#f4f7f3"/><path d="M20 4v32" stroke="#0f4d32" stroke-width="2"/><circle cx="20" cy="20" r="8" fill="none" stroke="#0f4d32" stroke-width="2"/><circle cx="20" cy="20" r="2.2" fill="#ffc53d"/></svg>
+        <span id="arenaName">Arena</span>
+      </a>
+      <nav class="side-nav" id="sideNav" aria-label="Dashboard"></nav>
+      <div class="side-foot">
+        <a class="side-link" href="../" target="_blank" rel="noopener"><iconify-icon icon="mdi:open-in-new"></iconify-icon>Open website</a>
+        <button class="side-link" data-act="logout"><iconify-icon icon="mdi:logout"></iconify-icon>Sign out</button>
+      </div>
+    </aside>
+    <div class="scrim" data-act="menu"></div>
+
+    <div class="main-col">
+      <header class="bar">
+        <button class="btn btn-icon btn-ghost menu" data-act="menu" aria-label="Open menu"><iconify-icon icon="mdi:menu"></iconify-icon></button>
+        <h1 id="pageTitle">Overview</h1>
+        <span class="bar-date" id="barDate"></span>
+        <button class="btn btn-icon btn-ghost" data-act="refresh" aria-label="Reload data" title="Reload data"><iconify-icon icon="mdi:refresh"></iconify-icon></button>
+        <button class="btn btn-turf" data-act="new"><iconify-icon icon="mdi:plus"></iconify-icon><span>New booking</span></button>
+      </header>
+      <main class="main" id="main"><div class="loading"><span class="spinner"></span>Loading from the sheet…</div></main>
+    </div>
+  </div>
+  <div class="tip" id="tip" role="tooltip" hidden></div>
+
+  <script src="../assets/config.js"></script>
+  <script src="../assets/api.js"></script>
+  <script src="../assets/admin-pages.js"></script>
+  <script src="../assets/admin-core.js"></script>
+</body>
+</html>
