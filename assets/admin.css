@@ -248,3 +248,10 @@ body { background: var(--chalk); }
   .sched-day .srow.free > :nth-child(n + 2):nth-child(-n + 4) { display: none; }
   .sched-day .srow.free .item-act, .sched-day .srow.blocked .item-act { grid-column: 2; grid-row: 1; }
 }
+/* Online payment claims (TrxID waiting to be checked) */
+.claim { display: block; margin-top: 2px; color: #a3196a !important; font-weight: 600; }
+.claim b { letter-spacing: .04em; }
+.chip-Check { background: #fde7f1; color: #a3196a; }
+.trx-id { font-size: 18px; letter-spacing: .06em; }
+.srow.held { border-left-color: #d1105f; background: #fff5fa; }
+.stime small { display: block; color: var(--muted); font-weight: 400; }

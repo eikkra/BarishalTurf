@@ -1,10 +1,10 @@
 // Public site logic. Needs api.js (api, $, esc, icon, taka, shortRange, toRuns, imgSrc…).
 // Talks to Code.gs: boot (settings + prices + 7 days of slots in one call), availability (other dates), book.
 const T0 = performance.now();
-const S = { week: 'weekday', cfg: null, today: todayISO(), days: {}, date: todayISO(), sel: new Set(), seq: 0, slide: 0, slideKey: '', slideTimer: 0, bootAt: 0 };
+const S = { cfg: null, today: todayISO(), days: {}, date: todayISO(), sel: new Set(), seq: 0, slide: 0, slideKey: '', slideTimer: 0, bootAt: 0 };
 const form = $('#bookForm');
 const CACHE = 'bta_boot_v2';
-const STATE_TEXT = { booked: 'Booked', blocked: 'Closed', past: 'Over', closed: 'Closed' };
+const STATE_TEXT = { held: 'On hold', booked: 'Booked', blocked: 'Closed', past: 'Over', closed: 'Closed' };
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const BAND_ICONS = [[/morn/i, 'weather-sunset-up'], [/mid|noon|day/i, 'white-balance-sunny'], [/even/i, 'weather-sunset-down'], [/night/i, 'weather-night']];
 const FACILITY_ICONS = [[/turf|field|grass/i, 'soccer-field'], [/friend|team/i, 'account-group'], [/light/i, 'lightbulb-on-outline'], [/park/i, 'parking'],
@@ -64,7 +64,7 @@ function apply(data, useDays) {
 
 /* ───── Scroll reveal: blocks rise in once as they enter the screen ───── */
 
-const REVEAL = '.head, .step, .summary, .offer, .rate, .facilities li, .gallery img, .map, .visit-info, details, .foot-grid > *, .about-media, .about-copy';
+const REVEAL = '.head, .step, .summary, .facilities li, .gallery img, .map, .visit-info, details, .foot-grid > *, .about-media, .about-copy';
 const revealer = 'IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches
   && new IntersectionObserver(entries => entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); revealer.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
 if (revealer) document.documentElement.classList.add('anim');
@@ -110,6 +110,7 @@ function applyBrand() {
   $('#aboutMedia').classList.toggle('has-img', !!aboutPhoto);
   if (aboutPhoto && $('#aboutImg').getAttribute('src') !== imgSrc(aboutPhoto)) $('#aboutImg').src = imgSrc(aboutPhoto);
   $('#pickHint').textContent = `(tap one or more, up to ${s.maxHours})`;
+  $('#payWin').textContent = mins(s.payMinutes);
   $('#otherDate').min = S.today;
   $('#otherDate').max = addDays(S.today, s.bookAheadDays);
 
@@ -131,25 +132,32 @@ function dayRange(list) {
 }
 
 function renderPrices() {
-  const s = S.cfg.settings, wk = weekendDays();
+  const s = S.cfg.settings, wk = weekendDays(), offer = s.offerActive, todayWk = isWeekend(S.today);
   $('#offers').innerHTML = [
-    s.offerActive && `<div class="offer">${icon('bullhorn-variant')}<div><b>${s.offerPercent}% off</b><span>${esc(s.offerTitle)}</span></div></div>`,
-    s.offerNote && `<div class="offer">${icon('gift-outline')}<div><b>Bonus</b><span>${esc(s.offerNote)}</span></div></div>`,
-    `<div class="offer">${icon('calendar-check')}<div><b>${s.advancePercent}% advance</b><span>Pay at least ${s.advancePercent}% to book your slot</span></div></div>`,
-  ].filter(Boolean).join('');
-  const subOf = weekend => (weekend ? `${wk.map(d => DAY_NAMES[d]).join(', ')} & govt. holidays` : dayRange([0, 1, 2, 3, 4, 5, 6].filter(d => !wk.includes(d))));
-  // Slim toggle (weekdays green / weekends red) switches one compact table
-  $('#wkTabs').innerHTML = ['weekday', 'weekend'].map(k => `<button role="tab" class="wk-${k}" data-week="${k}" aria-selected="${S.week === k}">
-    <b>${k === 'weekend' ? 'Weekends & holidays' : 'Weekdays'}</b><small>${subOf(k === 'weekend')}</small></button>`).join('');
-  const weekend = S.week === 'weekend';
-  $('#rateTables').innerHTML = `<div class="rate ${weekend ? 'weekend' : ''}"><table>
-    <thead><tr><th>Slot</th><th>Time</th>${s.offerActive ? '<th>Regular</th>' : ''}<th>${s.offerActive ? `Offer (${s.offerPercent}% off)` : 'Price'}</th></tr></thead><tbody>
-    ${S.cfg.pricing.map(b => {
-      const time = shortRange(b.start, b.end - b.start);
-      return `<tr><td>${icon(pickIcon(BAND_ICONS, b.label, 'clock-outline'))}<div>${esc(b.label)}<small>${time}</small></div></td><td>${time}</td>
-        ${s.offerActive ? `<td class="reg">${taka(weekend ? b.weekend : b.weekday)}</td>` : ''}<td class="now">${taka(weekend ? b.weekendPrice : b.weekdayPrice)}</td></tr>`;
-    }).join('')}</tbody></table></div>`;
+    offer && [`${s.offerPercent}% off`, s.offerTitle, 'bullhorn-variant'],
+    s.offerNote && ['Bonus', s.offerNote, 'gift-outline'],
+    [`${s.advancePercent}% advance`, `Pay at least ${s.advancePercent}% to book your slot`, 'calendar-check'],
+  ].filter(Boolean).map(([t, d, ic], i) => `<div class="offer" style="--i:${i}">${icon(ic)}<div><b>${esc(t)}</b><span>${esc(d)}</span></div></div>`).join('');
+
+  // One table like the flyer: every hour, weekday and weekend prices side by side
+  const compact = matchMedia('(max-width: 760px)').matches;
+  const head = (weekend, cls) => `<th class="${cls}${weekend === todayWk ? ' is-today' : ''}" ${!compact && offer ? 'colspan="2"' : ''}>
+    ${weekend ? 'Weekends' : 'Weekdays'}<small>${weekend ? `${wk.map(d => DAY_NAMES[d]).join(', ')} & govt. holidays` : dayRange([0, 1, 2, 3, 4, 5, 6].filter(d => !wk.includes(d)))}</small></th>`;
+  const price = (reg, now) => (compact ? `<td class="pc">${offer ? `<s>${taka(reg)}</s>` : ''}<b>${taka(now)}</b></td>`
+    : `${offer ? `<td class="reg">${taka(reg)}</td>` : ''}<td class="now">${taka(now)}</td>`);
+  const body = S.cfg.pricing.map((b, bi) => {
+    const hrs = Array.from({ length: b.end - b.start }, (_, i) => b.start + i), label = `${icon(pickIcon(BAND_ICONS, b.label, 'clock-outline'))}${esc(b.label)}`;
+    return (compact ? `<tr class="band-row band-${bi % 2}"><td colspan="3">${label}<small>${shortRange(b.start, b.end - b.start)}</small></td></tr>` : '')
+      + hrs.map((h, i) => `<tr class="band-${bi % 2}">${!compact && !i ? `<td class="band" rowspan="${hrs.length}">${label}</td>` : ''}
+        <td class="time">${compact ? shortRange(h) : timeRange(h, 1).replace(/:00/g, '')}</td>${price(b.weekday, b.weekdayPrice)}${price(b.weekend, b.weekendPrice)}</tr>`).join('');
+  }).join('');
+  const sub = !compact && offer ? `<tr><th class="wd">Regular</th><th class="wd">Discount</th><th class="we">Regular</th><th class="we">Discount</th></tr>` : '';
+  const cols = compact ? [30, 35, 35] : [15, 17, ...Array(offer ? 4 : 2).fill(offer ? 17 : 34)]; // equal weekday/weekend widths
+  $('#rateTables').innerHTML = `<div class="rate"><table class="ptable ${compact ? 'compact' : ''}"><colgroup>${cols.map(w => `<col style="width:${w}%">`).join('')}</colgroup><thead>
+    <tr>${compact ? '<th rowspan="1">Time</th>' : `<th rowspan="${sub ? 2 : 1}">Slot</th><th rowspan="${sub ? 2 : 1}">Time</th>`}${head(false, 'wd')}${head(true, 'we')}</tr>${sub}</thead>
+    <tbody>${body}</tbody></table></div>`;
 }
+matchMedia('(max-width: 760px)').addEventListener('change', () => S.cfg && renderPrices());
 
 /* ───── Hero slideshow (images from Settings → heroImages, every slideSeconds) ───── */
 
@@ -173,7 +181,6 @@ function setSlides(urls, secs) {
   S.showSlide = i => { show(i); start(); };
   if (urls.length) { show(0); start(); }
 }
-$('#wkTabs').addEventListener('click', e => { const b = e.target.closest('[data-week]'); if (b) { S.week = b.dataset.week; renderPrices(); } });
 $('#dots').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) S.showSlide(Number(b.dataset.i)); });
 
 /* ───── Step 1: days ───── */
@@ -253,30 +260,31 @@ function renderSummary() {
       ${q.regular > q.total ? `<div><dt>Offer saving</dt><dd>- ${taka(q.regular - q.total)}</dd></div>` : ''}
       <div class="total"><dt>Total</dt><dd>${q.regular > q.total ? `<s>${taka(q.regular)}</s>` : ''}${taka(q.total)}</dd></div>
       <div><dt>Advance to confirm</dt><dd>${taka(advance)} (${s.advancePercent}%)</dd></div></dl>
-    <button class="btn btn-gold" id="sendBtn" type="button">${icon('send')}Send booking request</button>
-    <p class="fine">We hold these hours for ${s.holdHours} hours while you send the advance.</p>`;
+    <button class="btn btn-gold" id="sendBtn" type="button">${icon('cellphone-check')}Continue to payment</button>
+    <p class="fine">Next: pay ${taka(advance)} by bKash or Nagad within ${mins(s.payMinutes)} and enter the TrxID. Your booking is sent only after that.</p>`;
   $('#sendBtn').onclick = submit;
   $('#mbTime').textContent = `${fmtDate(S.date, { day: 'numeric', month: 'short' })}, ${q.hours} hr${q.hours > 1 ? 's' : ''}`;
   $('#mbTotal').textContent = taka(q.total);
   bar.hidden = false;
 }
 
-/* ───── Submit ───── */
+/* ───── Payment: hold the hours → customer pays by bKash/Nagad → TrxID → booking is created ───── */
+
+const mins = m => (m < 60 ? `${m} minute${m > 1 ? 's' : ''}` : `${Math.floor(m / 60)} hour${m >= 120 ? 's' : ''}${m % 60 ? ` ${m % 60} min` : ''}`);
+const clock = ms => { const t = Math.max(0, Math.round(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, x = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
+const runsText = hrs => toRuns(hrs).map(r => shortRange(r.start, r.hours)).join(', ');
 
 async function submit() {
   const f = Object.fromEntries(new FormData(form)), phone = f.phone.replace(/\D/g, '').replace(/^88/, '');
   if (f.name.trim().length < 2) return invalid('name', 'Enter your name or team name.');
   if (!/^01[3-9]\d{8}$/.test(phone)) return invalid('phone', 'Enter an 11-digit mobile number starting with 01.');
-  const date = S.date;
   await busy($('#sendBtn'), async () => {
     try {
-      const res = await api('book', { ...f, phone, date, slots: [...S.sel] });
+      const hold = await api('hold', { ...f, phone, date: S.date, slots: [...S.sel] });
       try { localStorage.setItem('turf_me', JSON.stringify({ name: f.name, phone })); } catch {}
-      S.sel.clear();
-      showDone(res);
-    } catch (e) { toast(e.message, 'error'); }
+      payModal({ ...hold, name: f.name.trim(), phone });
+    } catch (e) { toast(e.message, 'error'); loadDay(); }
   });
-  loadDay(date);
 }
 
 function invalid(name, msg) {
@@ -286,16 +294,79 @@ function invalid(name, msg) {
   toast(msg, 'error');
 }
 
-function showDone(res) {
-  const s = S.cfg.settings, day = fmtDate(res.date, { weekday: 'short', day: 'numeric', month: 'short' });
-  const lines = res.bookings.map(b => `${b.id}: ${shortRange(b.start, b.hours)}`);
-  const msg = `Hello ${s.name}, I sent a booking request.\n${lines.join('\n')}\nDay: ${day}\nName: ${res.name}\nPhone: ${res.phone}\nTotal: ${taka(res.total)}\nPlease confirm.`;
-  openModal(`${icon('check-circle', 'done-icon')}<h2>Request sent</h2>
-    <p>Your booking ID${res.bookings.length > 1 ? 's' : ''}</p><div class="booking-ids">${res.bookings.map(b => `<span>${esc(b.id)}</span>`).join('')}</div>
-    <ul class="done-list"><li>${icon('calendar')} ${day}: ${res.bookings.map(b => shortRange(b.start, b.hours)).join(', ')}</li><li>${icon('cash')} Total ${taka(res.total)}</li></ul>
-    <div class="pay-box">Pay <b>${taka(res.advance)}</b> advance within ${s.holdHours} hours to confirm. ${esc(s.paymentInfo)}</div>
+function payModal(h) {
+  const s = S.cfg.settings, day = fmtDate(h.date, { weekday: 'short', day: 'numeric', month: 'short' });
+  const numbers = { bKash: s.bkashNumber, Nagad: s.nagadNumber };
+  let method = 'bKash', paid = false;
+  const dlg = openModal(`<h2>Pay to book</h2>
+    <div class="pay-head"><div><span>Booking ID</span><b>${esc(h.id)}</b></div><div class="pay-timer" role="timer"><span>Time left</span><b id="payClock">${clock(h.until - Date.now())}</b></div></div>
+    <p class="pay-sum">${icon('calendar')} ${day}: <b>${runsText(h.hrs)}</b> · Total ${taka(h.total)}</p>
+    <div class="pay-methods" role="radiogroup" aria-label="Pay with">
+      ${['bKash', 'Nagad'].map(m => `<button type="button" role="radio" class="pm pm-${m.toLowerCase()}" data-m="${m}" aria-checked="${m === method}">${m}</button>`).join('')}</div>
+    <ol class="pay-steps">
+      <li>Send Money <b>${taka(h.advance)}</b> or more to <b id="payNum"></b> <button type="button" class="copy" data-copy="num">${icon('content-copy')}Copy</button></li>
+      <li>Reference: <b>${esc(h.id)}</b> <button type="button" class="copy" data-copy="id">${icon('content-copy')}Copy</button></li>
+      <li>Enter the TrxID from your <span id="payName">bKash</span> message below.</li></ol>
+    ${s.paymentInfo ? `<p class="pay-note">${esc(s.paymentInfo)}</p>` : ''}
+    <form class="pay-form" novalidate>
+      <div class="grid-2"><label class="field">Amount sent (৳)<input class="input" name="amount" type="number" inputmode="numeric" min="${h.advance}" max="${h.total}" value="${h.advance}" required></label>
+      <label class="field">TrxID<input class="input trx" name="trxId" autocomplete="off" autocapitalize="characters" placeholder="9BG7XK2LMQ" maxlength="20" required></label></div>
+      <button class="btn btn-gold btn-lg">${icon('check-decagram')}Confirm booking</button>
+    </form>`);
+  const setMethod = m => {
+    method = m;
+    $$('.pm', dlg).forEach(b => b.setAttribute('aria-checked', b.dataset.m === m));
+    $('#payNum', dlg).textContent = numbers[m];
+    $('#payName', dlg).textContent = m;
+  };
+  setMethod(method);
+  $('.pay-methods', dlg).onclick = e => { const b = e.target.closest('[data-m]'); if (b) setMethod(b.dataset.m); };
+  dlg.addEventListener('click', e => {
+    const c = e.target.closest('[data-copy]');
+    if (c) navigator.clipboard?.writeText(c.dataset.copy === 'id' ? h.id : numbers[method]).then(() => toast('Copied'));
+  });
+  // Countdown; when it ends the hours are released and the form closes
+  const tick = setInterval(() => {
+    const left = h.until - Date.now();
+    $('#payClock', dlg).textContent = clock(left);
+    $('.pay-timer', dlg).classList.toggle('low', left < 60000);
+    if (left > 0) return;
+    clearInterval(tick);
+    $('form', dlg).outerHTML = `<div class="pay-over">${icon('timer-off-outline')}<p>Time is over and the hours were released. Pick your hours again to book.</p><button class="btn" data-close>Pick again</button></div>`;
+  }, 1000);
+  dlg.addEventListener('close', () => {
+    clearInterval(tick);
+    if (!paid) api('release', { id: h.id, phone: h.phone }).catch(() => {}).finally(() => loadDay(h.date));
+  });
+  $('form', dlg).addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target)), amt = Number(f.amount), trx = f.trxId.trim();
+    if (!(amt >= h.advance && amt <= h.total)) return toast(`Amount must be between ${taka(h.advance)} and ${taka(h.total)}.`, 'error');
+    if (!/^[A-Za-z0-9]{6,20}$/.test(trx)) return toast('Enter the TrxID from your payment message.', 'error');
+    await busy(e.submitter || $('button', e.target), async () => {
+      try {
+        const r = await api('pay', { id: h.id, phone: h.phone, method, trxId: trx, amount: amt });
+        paid = true;
+        clearInterval(tick);
+        S.sel.clear();
+        loadDay(h.date);
+        doneView(dlg, { ...h, ...r });
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+}
+
+function doneView(dlg, r) {
+  const s = S.cfg.settings, day = fmtDate(r.date, { weekday: 'short', day: 'numeric', month: 'short' });
+  const msg = `Hello ${s.name}, I booked ${r.id}.\nDay: ${day}\nTime: ${runsText(r.hrs)}\nName: ${r.name}\nPaid: ${taka(r.payClaim)} by ${r.payMethod}\nTrxID: ${r.trxId}\nPlease confirm.`;
+  dlg.innerHTML = `<button class="modal-x" type="button" aria-label="Close">${icon('close')}</button>
+    ${icon('check-circle', 'done-icon')}<h2>Booking received</h2>
+    <p>Your booking ID</p><div class="booking-ids"><span>${esc(r.id)}</span></div>
+    <ul class="done-list"><li>${icon('calendar')} ${day}: ${runsText(r.hrs)}</li><li>${icon('cash-check')} Paid ${taka(r.payClaim)} by ${esc(r.payMethod)}, TrxID ${esc(r.trxId)}</li>
+      <li>${icon('cash')} Total ${taka(r.total)}, rest ${taka(r.total - r.payClaim)} at the turf</li></ul>
+    <div class="pay-box">We are checking your payment. You will get the confirmation on WhatsApp shortly.</div>
     <div class="modal-actions"><button class="btn" data-close>Done</button>
-    <a class="btn btn-turf" href="${waLink(s.whatsapp, msg)}" target="_blank" rel="noopener">${icon('whatsapp')}Send on WhatsApp</a></div>`);
+    <a class="btn btn-turf" href="${waLink(s.whatsapp, msg)}" target="_blank" rel="noopener">${icon('whatsapp')}Send on WhatsApp</a></div>`;
 }
 
 /* ───── Hero card: today's real availability ───── */

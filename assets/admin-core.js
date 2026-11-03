@@ -100,7 +100,8 @@ const options = (list, sel, label = x => x) => list.map(x => `<option value="${x
 const hoursOf = s => Array.from({ length: s.closeHour - s.openHour }, (_, i) => s.openHour + i);
 
 function bookingModal(b, pre = {}) {
-  const s = A.d.settings, v = b || { name: '', phone: '', note: '', status: 'Confirmed', hours: 1, date: pre.date || A.d.today, start: pre.start ?? s.openHour };
+  const s = A.d.settings, v = b ? { ...b, start: b.hrs[0] } : { name: '', phone: '', note: '', status: 'Confirmed', hours: 1, date: pre.date || A.d.today, start: pre.start ?? s.openHour };
+  const split = b && b.hrs.length > 1 && toRuns(b.hrs).length > 1;
   const dlg = formModal(b ? `Edit ${esc(b.id)}` : 'New booking', `
     <div class="grid-2"><label class="field">Name or team<input class="input" name="name" required minlength="2" value="${esc(v.name)}"></label>
       <label class="field">Mobile<input class="input" name="phone" required inputmode="numeric" placeholder="01XXXXXXXXX" value="${esc(v.phone)}"></label></div>
@@ -113,36 +114,39 @@ function bookingModal(b, pre = {}) {
     ${b ? '' : `<div class="grid-3"><label class="field">Advance received (৳)<input class="input" type="number" min="0" name="advance" placeholder="0"></label>
       <label class="field">Method<select class="input" name="method">${options(A.d.methods.filter(m => m !== 'Refund'), 'Cash')}</select></label>
       <label class="field">Reference<input class="input" name="ref" placeholder="TrxID"></label></div>`}
+    ${split ? `<p class="meta">This booking has separate hours (${bTime(b)}). They stay as they are unless you change the date, start or hours.</p>` : ''}
     <label class="field">Note<input class="input" name="note" maxlength="200" value="${esc(v.note)}"></label>`,
   async (f, d) => {
     if (b && !$('[name=total]', d).dataset.dirty) delete f.total; // let the server re-price unless the total was edited
-    const id = await call('saveBooking', { ...f, id: b?.id });
+    const keepTime = b && !['date', 'start', 'hours'].some(n => $(`[name=${n}]`, d).dataset.dirty) ? 1 : undefined;
+    const id = await call('saveBooking', { ...f, id: b?.id, keepTime });
     toast(b ? 'Booking saved' : `Booking ${id} created`);
   }, b ? 'Save changes' : 'Create booking');
-  $('[name=total]', dlg).addEventListener('input', e => { e.target.dataset.dirty = '1'; });
+  ['total', 'date', 'start', 'hours'].forEach(n => $(`[name=${n}]`, dlg).addEventListener('input', e => { e.target.dataset.dirty = '1'; }));
 }
 
 /** Everything about one booking: who, when, money, every payment, and the actions. */
 function detailModal(b) {
   const pays = A.d.payments.filter(p => p.bookingId === b.id).sort((x, y) => String(x.date).localeCompare(y.date));
-  openModal(`<h2>${esc(b.id)}</h2><div class="det-chips">${chip(b.status)}${chip(b.pay)}${b.status === 'Pending' && !b.held ? chip('Expired') : ''}</div>
+  openModal(`<h2>${esc(b.id)}</h2><div class="det-chips">${chip(b.status)}${b.trxId && !b.paid ? chip('Check') : chip(b.pay)}</div>
     <dl class="det">
       <div><dt>Customer</dt><dd><b>${esc(b.name)}</b><br>${esc(b.phone)}</dd></div>
-      <div><dt>Day & time</dt><dd>${fmtDate(b.date, { weekday: 'long', day: 'numeric', month: 'long' })}<br>${timeRange(b.start, b.hours)} (${b.hours} h)</dd></div>
+      <div><dt>Day & time</dt><dd>${fmtDate(b.date, { weekday: 'long', day: 'numeric', month: 'long' })}<br>${bTime(b)} (${b.hours} h)</dd></div>
       <div><dt>Booked from</dt><dd>${b.source === 'web' ? 'Website' : 'Counter'}<br><small>${esc(b.createdAt)}</small></dd></div>
       ${b.note ? `<div><dt>Note</dt><dd>${esc(b.note)}</dd></div>` : ''}
+      ${b.trxId ? `<div><dt>Online payment</dt><dd>${esc(b.payMethod)} ${taka(b.payClaim)}<br>TrxID <b class="trx-id">${esc(b.trxId)}</b><br><small>${b.paid ? 'Checked and recorded' : 'Check this TrxID in your ' + esc(b.payMethod) + ' app, then Verify & confirm'}</small></dd></div>` : ''}
     </dl>
     <div class="det-money"><div><span>Total</span><b>${taka(b.total)}</b>${b.regular > b.total ? `<small>Regular ${taka(b.regular)}</small>` : ''}</div>
       <div><span>Paid</span><b>${taka(b.paid)}</b></div><div><span>Due</span><b class="${b.due > 0 ? 'due' : ''}">${taka(b.due)}</b></div></div>
     <h3 class="det-h">Payments</h3>
     ${pays.length ? `<ul class="pay-list">${pays.map(p => `<li><span>${esc(String(p.date).slice(0, 16))}</span><span>${esc(p.method)}${p.ref ? `, ${esc(p.ref)}` : ''}</span><b class="${p.amount < 0 ? 'due' : ''}">${taka(p.amount)}</b></li>`).join('')}</ul>`
       : '<p class="meta">No payment recorded yet.</p>'}
-    <div class="modal-actions">${b.status === 'Pending' ? act('confirm', b.id, 'check', 'Confirm', 'btn-turf') : ''}${b.due > 0 ? act('pay', b.id, 'cash-plus', 'Record payment', 'btn-turf') : ''}
+    <div class="modal-actions">${b.status === 'Pending' ? act('confirm', b.id, 'check-decagram', b.trxId ? 'Verify & confirm' : 'Confirm', 'btn-turf') : ''}${b.due > 0 && !(b.trxId && !b.paid) ? act('pay', b.id, 'cash-plus', 'Record payment', 'btn-turf') : ''}
       ${act('edit', b.id, 'pencil', 'Edit')}${waBtn(b)}${b.status !== 'Cancelled' ? act('cancel', b.id, 'close', 'Cancel', 'btn-danger') : ''}</div>`, { wide: true });
 }
 
 function paymentModal(b) {
-  formModal('Record payment', `<p class="modal-sub"><b>${esc(b.id)}</b>, ${esc(b.name)}, ${fmtDate(b.date)} ${timeRange(b.start, b.hours)}<br>
+  formModal('Record payment', `<p class="modal-sub"><b>${esc(b.id)}</b>, ${esc(b.name)}, ${fmtDate(b.date)} ${bTime(b)}<br>
     Total ${taka(b.total)}, paid ${taka(b.paid)}, due <b>${taka(b.due)}</b></p>
     <div class="grid-3"><label class="field">Amount (৳)<input class="input" type="number" min="1" name="amount" required value="${b.due || ''}"></label>
       <label class="field">Method<select class="input" name="method">${options(A.d.methods, 'Cash')}</select></label>
@@ -205,8 +209,8 @@ const ACTIONS = {
   'del-pay': id => confirm('Delete this payment record?') && mutate('remove', { sheet: 'Payments', id }, 'Payment deleted'),
   'add-band': () => $('#rateRows').insertAdjacentHTML('beforeend', A.bandRow({ label: '', start: A.d.settings.openHour, end: A.d.settings.closeHour, weekday: '', weekend: '' })),
   'del-band': (_, btn) => btn.closest('tr').remove(),
-  'export-bookings': () => csv('bookings', ['ID', 'Created', 'Source', 'Name', 'Phone', 'Date', 'Start', 'Hours', 'Regular', 'Total', 'Paid', 'Due', 'Status', 'Note'],
-    A.view.map(b => [b.id, b.createdAt, b.source, b.name, b.phone, b.date, hourLabel(b.start), b.hours, b.regular, b.total, b.paid, b.due, b.status, b.note])),
+  'export-bookings': () => csv('bookings', ['ID', 'Created', 'Source', 'Name', 'Phone', 'Date', 'Time', 'Hours', 'Regular', 'Total', 'Paid', 'Due', 'Status', 'Method', 'TrxID', 'Note'],
+    A.view.map(b => [b.id, b.createdAt, b.source, b.name, b.phone, b.date, bTime(b), b.hours, b.regular, b.total, b.paid, b.due, b.status, b.payMethod, b.trxId, b.note])),
   'export-payments': () => csv('payments', ['ID', 'Date', 'Booking', 'Customer', 'Method', 'Reference', 'Amount', 'Note'],
     A.d.payments.map(p => [p.id, p.date, p.bookingId, A.byId[p.bookingId]?.name, p.method, p.ref, p.amount, p.note])),
   'export-expenses': () => csv('expenses', ['ID', 'Date', 'Title', 'Category', 'Amount', 'Note'], A.view.map(e => [e.id, e.date, e.title, e.category, e.amount, e.note])),

@@ -2,25 +2,29 @@
 // Buttons carry data-act / data-id; admin-core.js handles them.
 
 const STATUS_ICON = { Pending: 'clock-outline', Confirmed: 'check-circle-outline', Completed: 'flag-checkered', Cancelled: 'close-circle-outline',
-  Paid: 'cash-check', Partial: 'cash-minus', Unpaid: 'cash-remove', Expired: 'timer-off-outline' };
+  Paid: 'cash-check', Partial: 'cash-minus', Unpaid: 'cash-remove', Check: 'shield-search' };
 const STATUS_FILL = { Confirmed: '#17663f', Pending: '#b86e00', Completed: '#34507a', Cancelled: '#9e2a23' };
 
-const chip = s => (s ? `<span class="chip chip-${s}">${icon(STATUS_ICON[s])}${s === 'Expired' ? 'Hold expired' : s}</span>` : '');
+const chip = s => (s ? `<span class="chip chip-${s}">${icon(STATUS_ICON[s])}${s === 'Check' ? 'Payment to check' : s}</span>` : '');
+/** "6–8 PM, 9–10 PM" for a booking's hours */
+const bTime = b => toRuns(b.hrs).map(r => shortRange(r.start, r.hours)).join(', ');
+/** Online payment the customer sent, waiting for the admin to check the TrxID */
+const claim = b => (b.trxId && !b.paid ? `<small class="claim">${esc(b.payMethod)} ${taka(b.payClaim)} · TrxID <b>${esc(b.trxId)}</b></small>` : '');
 const sumBy = (arr, k) => arr.reduce((t, x) => t + (Number(typeof k === 'function' ? k(x) : x[k]) || 0), 0);
 const kpi = (ic, label, value, sub = '') => `<div class="kpi">${icon(ic)}<span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
 const empty = (msg, ic = 'inbox-outline') => `<div class="empty">${icon(ic)}<p>${msg}</p></div>`;
 const who = b => `<button class="link" data-act="view" data-id="${esc(b.id)}">${esc(b.name)}</button><small>${esc(b.phone)}</small>`;
 const openHours = () => A.d.settings.closeHour - A.d.settings.openHour;
 const thumbs = text => `<div class="thumbs">${splitList(text).map(u => `<img src="${esc(imgSrc(u))}" alt="" loading="lazy" onerror="this.classList.add('bad')">`).join('')}</div>`;
-const when = b => `${fmtDate(b.date)}<small>${timeRange(b.start, b.hours)}</small>`;
+const when = b => `${fmtDate(b.date)}<small>${bTime(b)}</small>`;
 const act = (a, id, ic, label, cls = '') => `<button class="btn btn-sm ${cls}" data-act="${a}" data-id="${esc(id)}">${icon(ic)}${label}</button>`;
 const iconAct = (a, id, ic, label) => `<button class="btn btn-icon btn-ghost" data-act="${a}" data-id="${esc(id)}" title="${label}" aria-label="${label}">${icon(ic)}</button>`;
 const panel = (title, body, extra = '') => `<section class="panel"><div class="panel-head"><h2>${title}</h2>${extra}</div>${body}</section>`;
 
 function waBtn(b) {
-  const s = A.d.settings, slot = `${fmtDate(b.date, { weekday: 'short', day: 'numeric', month: 'short' })}, ${timeRange(b.start, b.hours)}`;
+  const s = A.d.settings, slot = `${fmtDate(b.date, { weekday: 'short', day: 'numeric', month: 'short' })}, ${bTime(b)}`;
   const text = b.status === 'Pending'
-    ? `Hi ${b.name}, we got your booking ${b.id} for ${slot}. Please send ${taka(Math.max(0, Math.ceil(b.total * s.advancePercent / 100) - b.paid))} advance to confirm it. ${s.paymentInfo}`
+    ? `Hi ${b.name}, we got your booking ${b.id} for ${slot}${b.trxId ? ` with TrxID ${b.trxId}. We are checking the payment.` : `. Please send ${taka(Math.max(0, Math.ceil(b.total * s.advancePercent / 100) - b.paid))} advance by bKash/Nagad to ${s.bkashNumber} with reference ${b.id}.`}`
     : `Hi ${b.name}, your booking ${b.id} for ${slot} is ${b.status.toLowerCase()}. ${b.due > 0 ? `Due: ${taka(b.due)}. ` : ''}Thank you, ${s.name}`;
   return `<a class="btn btn-icon btn-ghost" href="${waLink(b.phone, text)}" target="_blank" rel="noopener" title="WhatsApp ${esc(b.name)}" aria-label="WhatsApp ${esc(b.name)}">${icon('whatsapp')}</a>`;
 }
@@ -70,12 +74,12 @@ function dailyMoney(from, to) {
 const PAGES = {
   overview() {
     const { today } = A.d, bk = A.d.bookings;
-    const todays = bk.filter(b => b.date === today && b.held).sort((a, b) => a.start - b.start);
+    const todays = bk.filter(b => b.date === today && b.held).sort((a, b) => a.hrs[0] - b.hrs[0]);
     const requests = bk.filter(b => b.status === 'Pending' && b.source === 'web' && b.date >= today).sort((a, b) => String(b.createdAt).localeCompare(a.createdAt));
     const reqItem = b => `<li class="item"><div class="who">${who(b)}</div><div>${when(b)}</div>
-      <div>${taka(b.total)}<small>${b.paid ? `Paid ${taka(b.paid)}` : 'No advance yet'}</small></div><div>${chip(b.held ? 'Pending' : 'Expired')}</div>
-      <div class="item-act">${act('confirm', b.id, 'check', 'Confirm', 'btn-turf')}${iconAct('pay', b.id, 'cash-plus', 'Record payment')}${waBtn(b)}${iconAct('cancel', b.id, 'close', 'Cancel booking')}</div></li>`;
-    const dayItem = b => `<li class="item"><div class="time">${timeRange(b.start, b.hours)}</div><div class="who">${who(b)}</div>
+      <div>${taka(b.total)}${claim(b) || `<small>${b.paid ? `Paid ${taka(b.paid)}` : 'No advance yet'}</small>`}</div><div>${chip(b.trxId && !b.paid ? 'Check' : 'Pending')}</div>
+      <div class="item-act">${act('confirm', b.id, 'check-decagram', b.trxId ? 'Verify & confirm' : 'Confirm', 'btn-turf')}${iconAct('pay', b.id, 'cash-plus', 'Record payment')}${waBtn(b)}${iconAct('cancel', b.id, 'close', 'Cancel booking')}</div></li>`;
+    const dayItem = b => `<li class="item"><div class="time">${bTime(b)}</div><div class="who">${who(b)}</div>
       <div>${taka(b.total)}<small>${b.due > 0 ? `Due ${taka(b.due)}` : 'Fully paid'}</small></div><div>${chip(b.status)}</div>
       <div class="item-act">${b.due > 0 ? iconAct('pay', b.id, 'cash-plus', 'Record payment') : ''}${iconAct('edit', b.id, 'pencil', 'Edit')}${waBtn(b)}</div></li>`;
     return `<p class="hello">Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}. Here is ${esc(A.d.settings.name)} today.</p>
@@ -94,7 +98,7 @@ const PAGES = {
   bookings() {
     const f = A.f, q = f.q.toLowerCase();
     const rows = A.d.bookings.filter(b => (!f.status || b.status === f.status) && (!f.from || b.date >= f.from) && (!f.to || b.date <= f.to)
-      && (!q || `${b.id} ${b.name} ${b.phone}`.toLowerCase().includes(q))).sort((a, b) => b.date.localeCompare(a.date) || b.start - a.start);
+      && (!q || `${b.id} ${b.name} ${b.phone}`.toLowerCase().includes(q))).sort((a, b) => b.date.localeCompare(a.date) || b.hrs[0] - a.hrs[0]);
     A.view = rows;
     const shown = rows.slice(0, A.limit);
     return `<div class="filters">
@@ -105,7 +109,7 @@ const PAGES = {
     <p class="meta">${rows.length} bookings, ${taka(sumBy(rows.filter(b => b.status !== 'Cancelled'), 'total'))} booked value</p>
     ${table(['Booking', 'Customer', 'Date & time', 'Total', 'Paid', 'Due', 'Status', 'Payment', ''], shown.map(b => [
       `<button class="link" data-act="view" data-id="${esc(b.id)}">${esc(b.id)}</button><small>${b.source === 'web' ? 'Website' : 'Counter'}</small>`, who(b), when(b), taka(b.total), taka(b.paid),
-      b.due > 0 ? `<b class="due">${taka(b.due)}</b>` : taka(0), statusSelect(b) + (b.status === 'Pending' && !b.held ? chip('Expired') : ''), chip(b.pay),
+      b.due > 0 ? `<b class="due">${taka(b.due)}</b>` : taka(0), statusSelect(b), b.trxId && !b.paid && b.status === 'Pending' ? chip('Check') : chip(b.pay),
       `<div class="item-act">${iconAct('edit', b.id, 'pencil', 'Edit')}${b.due > 0 ? iconAct('pay', b.id, 'cash-plus', 'Record payment') : ''}${waBtn(b)}</div>`]), 'No bookings match these filters.')}
     ${rows.length > shown.length ? `<button class="btn more" data-act="more">Show more (${rows.length - shown.length} left)</button>` : ''}`;
   },
@@ -128,7 +132,7 @@ const PAGES = {
 
   payments() {
     const bk = A.d.bookings, active = bk.filter(b => b.status !== 'Cancelled'), booked = sumBy(active, 'total'), collected = sumBy(A.d.payments, 'amount');
-    const dues = active.filter(b => b.due > 0).sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
+    const dues = active.filter(b => b.due > 0).sort((a, b) => a.date.localeCompare(b.date) || a.hrs[0] - b.hrs[0]);
     const log = [...A.d.payments].sort((a, b) => String(b.date).localeCompare(a.date));
     const tab = A.f.ptab;
     return `<div class="kpis">${kpi('cash', 'Booked value', taka(booked), 'Cancelled bookings left out')}${kpi('cash-check', 'Collected', taka(collected), 'Advances, settlements and refunds')}
@@ -161,7 +165,7 @@ const PAGES = {
     const [from, to] = periodRange(A.f.period), inR = d => String(d).slice(0, 10) >= from && String(d).slice(0, 10) <= to;
     const bk = A.d.bookings.filter(b => inR(b.date)), active = bk.filter(b => b.status !== 'Cancelled'), cancelled = bk.length - active.length;
     const collected = sumBy(A.d.payments.filter(p => inR(p.date)), 'amount'), spent = sumBy(A.d.expenses.filter(e => inR(e.date)), 'amount');
-    const bandHours = A.d.pricing.map(p => ({ label: esc(p.label), v: sumBy(active, b => Math.max(0, Math.min(b.start + b.hours, p.end) - Math.max(b.start, p.start))) }));
+    const bandHours = A.d.pricing.map(p => ({ label: esc(p.label), v: sumBy(active, b => b.hrs.filter(h => h >= p.start && h < p.end).length) }));
     const days = (new Date(to) - new Date(from)) / 864e5;
     return `<div class="filters"><select class="input" data-f="period" aria-label="Period">
       ${[['month', 'This month'], ['last', 'Last month'], ['30', 'Last 30 days'], ['all', 'All time']].map(([v, l]) => `<option value="${v}" ${v === A.f.period ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -223,12 +227,12 @@ const SETTING_GROUPS = [
     ['heroImages', 'Top slideshow photos', 'images', 'one link per line; Google Drive files must be shared "Anyone with the link"'],
     ['slideSeconds', 'Change photo every', 'number', 'seconds'], ['gallery', 'Photos section', 'images', 'one link per line, optional']]],
   ['Booking rules', [['openHour', 'Opens at', 'number', 'hour 0–23'], ['closeHour', 'Closes at', 'number', 'hour 1–24'], ['maxHours', 'Most hours per online request', 'number', 'hours'],
-    ['bookAheadDays', 'Book up to', 'number', 'days ahead'], ['holdHours', 'Hold unpaid requests for', 'number', 'hours'], ['advancePercent', 'Advance to confirm', 'number', '% of total'],
+    ['bookAheadDays', 'Book up to', 'number', 'days ahead'], ['payMinutes', 'Time to pay online', 'number', 'minutes, 1 to 1440 (24 h)'], ['advancePercent', 'Advance to confirm', 'number', '% of total'],
     ['holidays', 'Holidays with weekend prices', 'textarea', 'dates like 2026-12-16, comma separated']]],
   ['About & footer', [['aboutTitle', 'About heading'], ['brandLine', 'Brand words', 'text', 'comma separated, e.g. Play, Friends, Fitness, Fun'],
     ['aboutText', 'About text', 'textarea'], ['footerText', 'Footer text', 'textarea'],
     ['footerNote', 'Footer note box', 'text', 'e.g. night match info'], ['aboutImage', 'About photo', 'images', 'empty = first slideshow photo']]],
-  ['After booking', [['paymentInfo', 'Payment instructions shown to the customer', 'textarea']]],
+  ['Online payment', [['bkashNumber', 'bKash number'], ['nagadNumber', 'Nagad number'], ['paymentInfo', 'Extra note on the payment screen', 'textarea']]],
 ];
 
 function periodRange(p) {
@@ -242,15 +246,21 @@ function periodRange(p) {
 /** One day hour by hour: bookings, blocks, free hours with Book / Block buttons. */
 function dayView(day) {
   const s = A.d.settings, now = day === A.d.today ? A.d.hour : day < A.d.today ? 99 : -1;
-  const bk = A.byDate[day] || [], bl = A.d.blocks.filter(x => x.date === day);
+  const bk = A.byDate[day] || [], bl = A.d.blocks.filter(x => x.date === day), ho = A.d.holds.filter(x => x.date === day);
   const rows = [];
   let free = 0;
   for (let h = s.openHour; h < s.closeHour;) {
-    const b = bk.find(x => h >= x.start && h < x.start + x.hours), k = bl.find(x => h >= +x.start && h < +x.end);
-    if (b) {
-      const end = b.start + b.hours;
-      rows.push(`<li class="srow booked"><div class="stime">${timeRange(h, end - h)}</div><div class="who">${who(b)}</div>
-        <div>${taka(b.total)}<small>${b.due > 0 ? `Due ${taka(b.due)}` : 'Fully paid'}</small></div><div>${chip(b.status)}</div>
+    const b = bk.find(x => x.hrs.includes(h)), k = bl.find(x => h >= +x.start && h < +x.end), o = ho.find(x => x.hrs.includes(h));
+    const runEnd = x => { let e = h; while (x.hrs.includes(e)) e++; return e; };
+    if (o) {
+      const end = runEnd(o);
+      rows.push(`<li class="srow held"><div class="stime">${timeRange(h, end - h)}</div><div class="who"><b>${icon('timer-sand')} ${esc(o.name)}</b><small>${esc(o.phone)}</small></div>
+        <div><small>Paying now, held till ${new Date(o.until).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' })}</small></div><div></div><div></div></li>`);
+      h = end;
+    } else if (b) {
+      const end = runEnd(b);
+      rows.push(`<li class="srow booked"><div class="stime">${timeRange(h, end - h)}${b.hrs.length > end - h ? `<small>part of ${esc(b.id)}</small>` : ''}</div><div class="who">${who(b)}</div>
+        <div>${taka(b.total)}${claim(b) || `<small>${b.due > 0 ? `Due ${taka(b.due)}` : 'Fully paid'}</small>`}</div><div>${chip(b.status)}</div>
         <div class="item-act">${b.due > 0 ? iconAct('pay', b.id, 'cash-plus', 'Record payment') : ''}${iconAct('edit', b.id, 'pencil', 'Edit')}${waBtn(b)}</div></li>`);
       h = end;
     } else if (k) {
